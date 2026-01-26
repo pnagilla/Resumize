@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resumize - AI Resume Matcher</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Resumize</h1>
+            <p class="tagline">AI-Powered Resume & Job Description Matcher</p>
+        </header>
+
+        <main>
+            <form id="analyzeForm">
+                <div class="form-section">
+                    <label for="resume">Upload Resume (PDF or DOCX)</label>
+                    <div class="file-upload" id="dropZone">
+                        <input type="file" id="resume" name="resume" accept=".pdf,.docx,.doc" required>
+                        <div class="file-upload-content">
+                            <span class="upload-icon">📄</span>
+                            <p>Drag & drop your resume here or <span class="browse">browse</span></p>
+                            <p class="file-types">Supports PDF, DOCX</p>
+                        </div>
+                        <div class="file-selected" id="fileSelected" style="display: none;">
+                            <span class="file-icon">✓</span>
+                            <span class="file-name" id="fileName"></span>
+                            <button type="button" class="remove-file" id="removeFile">×</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <label for="jobTitle">Job Title (optional)</label>
+                    <input type="text" id="jobTitle" name="jobTitle" placeholder="e.g., Senior Software Engineer">
+                </div>
+
+                <div class="form-section">
+                    <label for="jobDescription">Job Description</label>
+                    <textarea id="jobDescription" name="jobDescription" rows="10"
+                        placeholder="Paste the full job description here..." required></textarea>
+                </div>
+
+                <button type="submit" class="submit-btn" id="submitBtn">
+                    <span class="btn-text">Analyze Resume</span>
+                    <span class="btn-loading" style="display: none;">Analyzing...</span>
+                </button>
+            </form>
+
+            <div id="results" class="results" style="display: none;">
+                <h2>Analysis Results</h2>
+
+                <!-- Top Stats Row -->
+                <div class="stats-row">
+                    <div class="stat-card main-score">
+                        <div class="stat-value" id="overallScore">0%</div>
+                        <div class="stat-label">Overall ATS Score</div>
+                        <div class="stat-bar">
+                            <div class="stat-bar-fill" id="overallScoreBar"></div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="totalSections">0</div>
+                        <div class="stat-label">Resume Sections</div>
+                        <div class="stat-sublabel">Analyzed for improvements</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value improvements-count" id="totalImprovements">0</div>
+                        <div class="stat-label">Improvements</div>
+                        <div class="stat-sublabel">Suggested changes</div>
+                    </div>
+                </div>
+
+                <!-- Component Analysis - Sidebar Layout -->
+                <div class="analysis-layout">
+                    <!-- Left Sidebar -->
+                    <div class="analysis-sidebar">
+                        <div class="sidebar-header">
+                            <span class="sidebar-icon">⚙️</span>
+                            <span>Component Analysis</span>
+                        </div>
+                        <div class="sidebar-title">Resume Sections</div>
+                        <div class="section-list" id="sectionList">
+                            <!-- Sections will be dynamically inserted here -->
+                        </div>
+                    </div>
+
+                    <!-- Right Detail Panel -->
+                    <div class="analysis-detail" id="analysisDetail">
+                        <div class="detail-placeholder">
+                            <p>Select a section from the left to view detailed analysis</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- AI Justification -->
+                <div class="result-card">
+                    <h3>AI Analysis Summary</h3>
+                    <p id="scoreJustification" class="ai-summary"></p>
+                </div>
+
+                <!-- Matched Skills -->
+                <div class="result-card">
+                    <h3>Matched Skills</h3>
+                    <div class="skills-list matched-skills" id="matchedSkills"></div>
+                </div>
+
+                <!-- Missing Skills -->
+                <div class="result-card">
+                    <h3>Missing Skills</h3>
+                    <p class="section-description">Add these to your resume if applicable</p>
+                    <div class="skills-list" id="missingSkills"></div>
+                </div>
+
+                <!-- Optimized Bullets -->
+                <div class="result-card">
+                    <h3>Optimized Bullet Points</h3>
+                    <p class="section-description">Copy these ATS-friendly bullets to your resume</p>
+                    <div class="bullets-list" id="rewrittenBullets"></div>
+                </div>
+
+                <button class="new-analysis-btn" id="newAnalysisBtn">Start New Analysis</button>
+            </div>
+        </main>
+
+        <footer>
+            <p>Built with Llama 3.3 + Deterministic ATS Engine</p>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
