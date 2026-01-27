@@ -8,7 +8,8 @@ from models.schemas import SectionAnalysis, SectionScore
 from services.ats_service import calculate_ats_score
 from services.section_service import analyze_all_sections
 
-ANALYSIS_PROMPT = """You are an expert ATS (Applicant Tracking System) resume analyzer and career coach.
+# Prompt when job description is provided
+ANALYSIS_PROMPT_WITH_JD = """You are an expert ATS (Applicant Tracking System) resume analyzer and career coach.
 
 Analyze the following resume against the job description. Provide a detailed analysis in JSON format.
 
@@ -44,10 +45,46 @@ Guidelines:
 
 Return ONLY the JSON object, no additional text or markdown formatting."""
 
+# Prompt when NO job description is provided (general ATS analysis)
+ANALYSIS_PROMPT_NO_JD = """You are an expert ATS (Applicant Tracking System) resume analyzer and career coach.
 
-def analyze_resume(resume_text: str, job_description: str) -> AnalysisResult:
+Analyze the following resume for general ATS compatibility and provide improvement suggestions.
+
+RESUME:
+{resume_text}
+
+Provide your analysis as a valid JSON object with this exact structure:
+{{
+    "detected_skills": ["<skill1>", "<skill2>", ...],
+    "match_justification": "<2-3 sentence overview of the resume's strengths, weaknesses, and ATS compatibility>",
+    "improvement_areas": ["<area1>", "<area2>", ...],
+    "rewritten_bullets": [
+        {{
+            "original": "<original bullet point that could be improved>",
+            "rewritten": "<ATS-optimized version with stronger impact>",
+            "keywords_used": ["<keyword1>", "<keyword2>"]
+        }}
+    ]
+}}
+
+Guidelines:
+1. DETECTED_SKILLS: Extract ALL technical skills, tools, frameworks, soft skills found in the resume
+2. IMPROVEMENT_AREAS: List general areas that need improvement (e.g., "Add more quantifiable metrics", "Include LinkedIn profile")
+3. REWRITTEN BULLETS: Select 3-5 bullets that could be improved and rewrite them to:
+   - Start with strong action verbs (Led, Developed, Implemented, Optimized, etc.)
+   - Add quantifiable achievements (%, $, numbers)
+   - Make them more impactful and ATS-friendly
+   - Keep each bullet to 1-2 lines
+
+Return ONLY the JSON object, no additional text or markdown formatting."""
+
+
+def analyze_resume(resume_text: str, job_description: str = "") -> AnalysisResult:
     """
-    Analyze resume against job description using:
+    Analyze resume for ATS compatibility.
+    If job_description is provided, also performs targeted skill matching.
+
+    Uses:
     - Groq API (Llama 3) for AI insights (bullet rewrites, skill extraction)
     - Deterministic ATS Engine for weighted scoring
     - Section-by-section analysis
@@ -62,10 +99,18 @@ def analyze_resume(resume_text: str, job_description: str) -> AnalysisResult:
 
     client = Groq(api_key=api_key)
 
-    prompt = ANALYSIS_PROMPT.format(
-        resume_text=resume_text,
-        job_description=job_description
-    )
+    # Determine if we have a job description
+    has_jd = bool(job_description and job_description.strip())
+
+    if has_jd:
+        prompt = ANALYSIS_PROMPT_WITH_JD.format(
+            resume_text=resume_text,
+            job_description=job_description
+        )
+    else:
+        prompt = ANALYSIS_PROMPT_NO_JD.format(
+            resume_text=resume_text
+        )
 
     try:
         # Step 1: AI Analysis (skill extraction, bullet rewrites)
@@ -91,8 +136,15 @@ def analyze_resume(resume_text: str, job_description: str) -> AnalysisResult:
         # Parse JSON response
         ai_analysis = json.loads(response_text)
 
+        # Get skills list (different key depending on whether JD was provided)
+        if has_jd:
+            jd_skills = ai_analysis.get("jd_skills", [])
+            missing_skills = ai_analysis.get("missing_skills", [])
+        else:
+            jd_skills = ai_analysis.get("detected_skills", [])
+            missing_skills = ai_analysis.get("improvement_areas", [])
+
         # Step 2: Deterministic ATS Scoring
-        jd_skills = ai_analysis.get("jd_skills", [])
         ats_result = calculate_ats_score(resume_text, job_description, jd_skills)
 
         # Build ATS Score breakdown
@@ -123,11 +175,18 @@ def analyze_resume(resume_text: str, job_description: str) -> AnalysisResult:
             for bullet in ai_analysis.get("rewritten_bullets", [])
         ]
 
+        # Build justification message
+        if has_jd:
+            justification = ai_analysis.get("match_justification", "")
+        else:
+            justification = ai_analysis.get("match_justification",
+                "General ATS analysis completed. Add a job description for targeted skill matching and more specific recommendations.")
+
         # Combine AI insights with deterministic scoring
         return AnalysisResult(
             match_score=section_result["overall_score"],  # Use section-based score
-            match_justification=ai_analysis.get("match_justification", ""),
-            missing_skills=ai_analysis.get("missing_skills", []),
+            match_justification=justification,
+            missing_skills=missing_skills,
             rewritten_bullets=rewritten_bullets,
             ats_score=ats_score,
             section_analysis=section_analysis

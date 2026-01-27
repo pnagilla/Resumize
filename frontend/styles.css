@@ -60,6 +60,12 @@ label {
     font-weight: 500;
 }
 
+.optional-label {
+    font-weight: 400;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
 input[type="text"],
 textarea {
     width: 100%;

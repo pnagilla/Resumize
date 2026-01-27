@@ -12,17 +12,18 @@ router = APIRouter()
 @router.post("/analyze", response_model=AnalysisResponse)
 async def analyze(
     resume: UploadFile = File(..., description="Resume file (PDF or DOCX)"),
-    job_description: str = Form(..., description="Job description text"),
+    job_description: Optional[str] = Form("", description="Job description text (optional)"),
     job_title: Optional[str] = Form(None, description="Job title (optional)")
 ):
     """
-    Analyze a resume against a job description.
+    Analyze a resume for ATS compatibility and optionally against a job description.
 
     - **resume**: Upload your resume (PDF or DOCX format)
-    - **job_description**: Paste the job description text
+    - **job_description**: Paste the job description text (optional - for targeted analysis)
     - **job_title**: Optional job title for reference
 
-    Returns match score, missing skills, and ATS-optimized bullet points.
+    Returns ATS score, section analysis, and improvement suggestions.
+    If job description is provided, also returns skill matching and rewritten bullets.
     """
     # Validate file type
     if not resume.filename:

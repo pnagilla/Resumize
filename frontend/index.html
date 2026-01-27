@@ -38,9 +38,9 @@
                 </div>
 
                 <div class="form-section">
-                    <label for="jobDescription">Job Description</label>
+                    <label for="jobDescription">Job Description <span class="optional-label">(Optional - for targeted analysis)</span></label>
                     <textarea id="jobDescription" name="jobDescription" rows="10"
-                        placeholder="Paste the full job description here..." required></textarea>
+                        placeholder="Paste the job description here for targeted skill matching, or leave empty for general ATS analysis..."></textarea>
                 </div>
 
                 <button type="submit" class="submit-btn" id="submitBtn">
@@ -102,15 +102,15 @@
                 </div>
 
                 <!-- Matched Skills -->
-                <div class="result-card">
-                    <h3>Matched Skills</h3>
+                <div class="result-card" id="matchedSkillsCard">
+                    <h3 id="matchedSkillsTitle">Matched Skills</h3>
                     <div class="skills-list matched-skills" id="matchedSkills"></div>
                 </div>
 
-                <!-- Missing Skills -->
+                <!-- Missing Skills / Improvement Areas -->
                 <div class="result-card">
-                    <h3>Missing Skills</h3>
-                    <p class="section-description">Add these to your resume if applicable</p>
+                    <h3 id="missingSkillsTitle">Missing Skills</h3>
+                    <p class="section-description" id="missingSkillsDesc">Add these to your resume if applicable</p>
                     <div class="skills-list" id="missingSkills"></div>
                 </div>
 

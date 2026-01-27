@@ -152,6 +152,28 @@ function displayResults(data) {
     // AI Summary
     document.getElementById('scoreJustification').textContent = analysis.match_justification;
 
+    // Check if job description was provided (based on ATS breakdown)
+    const hasJD = analysis.ats_score?.breakdown?.skill_match?.matched_skills?.length > 0 ||
+                  analysis.ats_score?.breakdown?.keyword_match?.total_keywords > 0;
+
+    // Update titles based on whether JD was provided
+    const matchedSkillsTitle = document.getElementById('matchedSkillsTitle');
+    const matchedSkillsCard = document.getElementById('matchedSkillsCard');
+    const missingSkillsTitle = document.getElementById('missingSkillsTitle');
+    const missingSkillsDesc = document.getElementById('missingSkillsDesc');
+
+    if (hasJD) {
+        matchedSkillsTitle.textContent = 'Matched Skills';
+        missingSkillsTitle.textContent = 'Missing Skills';
+        missingSkillsDesc.textContent = 'Add these to your resume if applicable';
+        matchedSkillsCard.style.display = 'block';
+    } else {
+        matchedSkillsTitle.textContent = 'Detected Skills';
+        missingSkillsTitle.textContent = 'Improvement Areas';
+        missingSkillsDesc.textContent = 'General recommendations to strengthen your resume';
+        matchedSkillsCard.style.display = 'none'; // Hide matched skills when no JD
+    }
+
     // Matched Skills (from ATS breakdown)
     const matchedSkills = document.getElementById('matchedSkills');
     if (analysis.ats_score?.breakdown?.skill_match?.matched_skills?.length > 0) {
@@ -162,11 +184,17 @@ function displayResults(data) {
         matchedSkills.innerHTML = '<p style="color: var(--text-muted);">No skills matched</p>';
     }
 
-    // Missing skills
+    // Missing skills / Improvement Areas
     const missingSkills = document.getElementById('missingSkills');
-    missingSkills.innerHTML = analysis.missing_skills.length > 0
-        ? analysis.missing_skills.map(skill => `<span class="skill-tag">${escapeHtml(skill)}</span>`).join('')
-        : '<p style="color: var(--success);">No critical skills missing!</p>';
+    if (analysis.missing_skills.length > 0) {
+        missingSkills.innerHTML = analysis.missing_skills
+            .map(skill => `<span class="skill-tag">${escapeHtml(skill)}</span>`)
+            .join('');
+    } else {
+        missingSkills.innerHTML = hasJD
+            ? '<p style="color: var(--success);">No critical skills missing!</p>'
+            : '<p style="color: var(--success);">Resume looks good for general ATS compatibility!</p>';
+    }
 
     // Rewritten bullets
     const rewrittenBullets = document.getElementById('rewrittenBullets');

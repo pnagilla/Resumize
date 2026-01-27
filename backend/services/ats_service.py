@@ -152,24 +152,51 @@ def calculate_ats_score(
     """
     Calculate overall ATS score with weighted breakdown.
 
-    Weights:
+    With Job Description (weights):
       - 40% Skill Match
       - 30% Keyword Match
       - 20% Experience Match
       - 10% Formatting & Structure
+
+    Without Job Description (weights shift to resume quality):
+      - 20% Skills Present (general check)
+      - 20% Content Quality
+      - 30% Experience Section
+      - 30% Formatting & Structure
     """
+    has_jd = bool(job_description and job_description.strip())
+
     # Calculate individual scores
     skill_score, matched_skills, missing_skills = calculate_skill_match(resume_text, jd_skills)
     keyword_score, keyword_matched, keyword_total = calculate_keyword_match(resume_text, job_description)
     experience_score, experience_note = calculate_experience_match(resume_text, job_description)
     formatting_score, formatting_warnings = calculate_formatting_score(resume_text)
 
+    if has_jd:
+        # With JD: Focus on matching
+        skill_weight = 0.40
+        keyword_weight = 0.30
+        exp_weight = 0.20
+        format_weight = 0.10
+    else:
+        # Without JD: Focus on resume quality and ATS-friendliness
+        skill_weight = 0.20
+        keyword_weight = 0.20
+        exp_weight = 0.30
+        format_weight = 0.30
+
+        # Adjust scores for no-JD mode
+        # Check if resume has good skill representation
+        skill_score = calculate_general_skills_score(resume_text)
+        keyword_score = calculate_content_quality_score(resume_text)
+        experience_note = "General experience evaluation (no JD provided)"
+
     # Calculate weighted final score
     final_score = int(
-        (skill_score * 0.40) +
-        (keyword_score * 0.30) +
-        (experience_score * 0.20) +
-        (formatting_score * 0.10)
+        (skill_score * skill_weight) +
+        (keyword_score * keyword_weight) +
+        (experience_score * exp_weight) +
+        (formatting_score * format_weight)
     )
 
     return {
@@ -177,29 +204,85 @@ def calculate_ats_score(
         "breakdown": {
             "skill_match": {
                 "score": skill_score,
-                "weight": 40,
-                "weighted_score": int(skill_score * 0.40),
+                "weight": int(skill_weight * 100),
+                "weighted_score": int(skill_score * skill_weight),
                 "matched_skills": matched_skills,
                 "missing_skills": missing_skills
             },
             "keyword_match": {
                 "score": keyword_score,
-                "weight": 30,
-                "weighted_score": int(keyword_score * 0.30),
+                "weight": int(keyword_weight * 100),
+                "weighted_score": int(keyword_score * keyword_weight),
                 "matched_count": keyword_matched,
                 "total_keywords": keyword_total
             },
             "experience_match": {
                 "score": experience_score,
-                "weight": 20,
-                "weighted_score": int(experience_score * 0.20),
+                "weight": int(exp_weight * 100),
+                "weighted_score": int(experience_score * exp_weight),
                 "note": experience_note
             },
             "formatting": {
                 "score": formatting_score,
-                "weight": 10,
-                "weighted_score": int(formatting_score * 0.10),
+                "weight": int(format_weight * 100),
+                "weighted_score": int(formatting_score * format_weight),
                 "warnings": formatting_warnings
             }
         }
     }
+
+
+def calculate_general_skills_score(resume_text: str) -> int:
+    """Calculate a general skills score when no JD is provided."""
+    resume_lower = resume_text.lower()
+    score = 50  # Base score
+
+    # Check for common skills section
+    if any(term in resume_lower for term in ['skills', 'technologies', 'technical skills']):
+        score += 15
+
+    # Check for variety of technical terms
+    tech_terms = ['python', 'java', 'javascript', 'sql', 'aws', 'docker', 'kubernetes',
+                  'react', 'node', 'git', 'agile', 'scrum', 'api', 'database', 'cloud',
+                  'machine learning', 'data', 'analytics', 'devops', 'ci/cd']
+    found_terms = sum(1 for term in tech_terms if term in resume_lower)
+
+    if found_terms >= 8:
+        score += 25
+    elif found_terms >= 5:
+        score += 15
+    elif found_terms >= 2:
+        score += 10
+
+    # Check for soft skills
+    soft_skills = ['leadership', 'communication', 'teamwork', 'problem-solving', 'analytical']
+    found_soft = sum(1 for s in soft_skills if s in resume_lower)
+    if found_soft >= 2:
+        score += 10
+
+    return min(score, 100)
+
+
+def calculate_content_quality_score(resume_text: str) -> int:
+    """Calculate content quality score when no JD is provided."""
+    resume_lower = resume_text.lower()
+    score = 50  # Base score
+
+    # Check for quantifiable achievements
+    if re.search(r'\d+%|\$[\d,]+|\d+x|\d+\s*(users?|customers?|clients?)', resume_lower):
+        score += 20
+
+    # Check for action verbs
+    action_verbs = ['led', 'developed', 'implemented', 'managed', 'created', 'designed',
+                    'built', 'optimized', 'increased', 'decreased', 'achieved', 'delivered']
+    verb_count = sum(1 for verb in action_verbs if verb in resume_lower)
+    if verb_count >= 5:
+        score += 20
+    elif verb_count >= 2:
+        score += 10
+
+    # Check for bullet points
+    if '•' in resume_text or re.search(r'^\s*[-*]\s', resume_text, re.MULTILINE):
+        score += 10
+
+    return min(score, 100)
