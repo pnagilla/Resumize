@@ -111,6 +111,10 @@ function getScoreClass(score) {
 
 // Store sections data globally for click handling
 let sectionsData = [];
+let matchedSkillsData = [];
+let missingSkillsData = [];
+let rewrittenBulletsData = [];
+let hasJobDescription = false;
 
 // Display results
 function displayResults(data) {
@@ -153,63 +157,13 @@ function displayResults(data) {
     document.getElementById('scoreJustification').textContent = analysis.match_justification;
 
     // Check if job description was provided (based on ATS breakdown)
-    const hasJD = analysis.ats_score?.breakdown?.skill_match?.matched_skills?.length > 0 ||
+    hasJobDescription = analysis.ats_score?.breakdown?.skill_match?.matched_skills?.length > 0 ||
                   analysis.ats_score?.breakdown?.keyword_match?.total_keywords > 0;
 
-    // Update titles based on whether JD was provided
-    const matchedSkillsTitle = document.getElementById('matchedSkillsTitle');
-    const matchedSkillsCard = document.getElementById('matchedSkillsCard');
-    const missingSkillsTitle = document.getElementById('missingSkillsTitle');
-    const missingSkillsDesc = document.getElementById('missingSkillsDesc');
-
-    if (hasJD) {
-        matchedSkillsTitle.textContent = 'Matched Skills';
-        missingSkillsTitle.textContent = 'Missing Skills';
-        missingSkillsDesc.textContent = 'Add these to your resume if applicable';
-        matchedSkillsCard.style.display = 'block';
-    } else {
-        matchedSkillsTitle.textContent = 'Detected Skills';
-        missingSkillsTitle.textContent = 'Improvement Areas';
-        missingSkillsDesc.textContent = 'General recommendations to strengthen your resume';
-        matchedSkillsCard.style.display = 'none'; // Hide matched skills when no JD
-    }
-
-    // Matched Skills (from ATS breakdown)
-    const matchedSkills = document.getElementById('matchedSkills');
-    if (analysis.ats_score?.breakdown?.skill_match?.matched_skills?.length > 0) {
-        matchedSkills.innerHTML = analysis.ats_score.breakdown.skill_match.matched_skills
-            .map(skill => `<span class="skill-tag">${escapeHtml(skill)}</span>`)
-            .join('');
-    } else {
-        matchedSkills.innerHTML = '<p style="color: var(--text-muted);">No skills matched</p>';
-    }
-
-    // Missing skills / Improvement Areas
-    const missingSkills = document.getElementById('missingSkills');
-    if (analysis.missing_skills.length > 0) {
-        missingSkills.innerHTML = analysis.missing_skills
-            .map(skill => `<span class="skill-tag">${escapeHtml(skill)}</span>`)
-            .join('');
-    } else {
-        missingSkills.innerHTML = hasJD
-            ? '<p style="color: var(--success);">No critical skills missing!</p>'
-            : '<p style="color: var(--success);">Resume looks good for general ATS compatibility!</p>';
-    }
-
-    // Rewritten bullets
-    const rewrittenBullets = document.getElementById('rewrittenBullets');
-    rewrittenBullets.innerHTML = analysis.rewritten_bullets.map(bullet => `
-        <div class="bullet-item">
-            <div class="bullet-original">${escapeHtml(bullet.original)}</div>
-            <div class="bullet-rewritten">${escapeHtml(bullet.rewritten)}</div>
-            <div class="bullet-keywords">
-                ${bullet.keywords_used.map(kw => `<span class="keyword-tag">${escapeHtml(kw)}</span>`).join('')}
-            </div>
-            <button class="copy-btn" onclick="copyToClipboard('${escapeHtml(bullet.rewritten).replace(/'/g, "\\'")}')">
-                Copy bullet
-            </button>
-        </div>
-    `).join('');
+    // Store skills and bullets data for section detail display
+    matchedSkillsData = analysis.ats_score?.breakdown?.skill_match?.matched_skills || [];
+    missingSkillsData = analysis.missing_skills || [];
+    rewrittenBulletsData = analysis.rewritten_bullets || [];
 
     // Show results, hide form
     form.style.display = 'none';
@@ -283,6 +237,19 @@ function showSectionDetail(index) {
         `;
     }
 
+    // Add section-specific content
+    let sectionSpecificHtml = '';
+
+    // Skills section: show matched and missing skills
+    if (section.name === 'Skills') {
+        sectionSpecificHtml = buildSkillsDetailHtml();
+    }
+
+    // Work Experience section: show optimized bullet points
+    if (section.name === 'Work Experience') {
+        sectionSpecificHtml = buildBulletsDetailHtml();
+    }
+
     detailPanel.innerHTML = `
         <div class="detail-section-header">
             <span class="detail-section-icon">${icon}</span>
@@ -294,6 +261,87 @@ function showSectionDetail(index) {
         ${issuesHtml}
         ${improvementsHtml}
         ${goodHtml}
+        ${sectionSpecificHtml}
+    `;
+}
+
+// Build HTML for skills detail (matched and missing skills)
+function buildSkillsDetailHtml() {
+    let html = '';
+
+    // Matched Skills
+    if (hasJobDescription && matchedSkillsData.length > 0) {
+        html += `
+            <div class="detail-block">
+                <div class="detail-block-header">
+                    <span class="icon">✓</span>
+                    <span>Matched Skills</span>
+                </div>
+                <div class="skills-list matched-skills">
+                    ${matchedSkillsData.map(skill => `<span class="skill-tag">${escapeHtml(skill)}</span>`).join('')}
+                </div>
+            </div>
+        `;
+    }
+
+    // Missing Skills / Improvement Areas
+    if (missingSkillsData.length > 0) {
+        const title = hasJobDescription ? 'Missing Skills' : 'Improvement Areas';
+        const desc = hasJobDescription ? 'Add these to your resume if applicable' : 'General recommendations to strengthen your resume';
+        html += `
+            <div class="detail-block">
+                <div class="detail-block-header">
+                    <span class="icon">📝</span>
+                    <span>${title}</span>
+                </div>
+                <p class="section-description">${desc}</p>
+                <div class="skills-list">
+                    ${missingSkillsData.map(skill => `<span class="skill-tag">${escapeHtml(skill)}</span>`).join('')}
+                </div>
+            </div>
+        `;
+    } else if (hasJobDescription) {
+        html += `
+            <div class="detail-block">
+                <div class="good-item">
+                    <span class="icon">✓</span>
+                    <p>No critical skills missing!</p>
+                </div>
+            </div>
+        `;
+    }
+
+    return html;
+}
+
+// Build HTML for optimized bullet points
+function buildBulletsDetailHtml() {
+    if (rewrittenBulletsData.length === 0) {
+        return '';
+    }
+
+    return `
+        <div class="detail-block">
+            <div class="detail-block-header">
+                <span class="icon">✨</span>
+                <span>Optimized Bullet Points</span>
+            </div>
+            <p class="section-description">Copy these ATS-friendly bullets to your resume</p>
+            <div class="bullets-list">
+                ${rewrittenBulletsData.map(bullet => `
+                    <div class="bullet-item">
+                        <div class="bullet-original">${escapeHtml(bullet.original)}</div>
+                        <div class="bullet-rewritten">${escapeHtml(bullet.rewritten)}</div>
+                        <div class="bullet-keywords">
+                            ${bullet.keywords_used.map(kw => `<span class="keyword-tag">${escapeHtml(kw)}</span>`).join('')}
+                        </div>
+                        <button class="copy-btn" onclick="copyToClipboard('${escapeHtml(bullet.rewritten).replace(/'/g, "\\'")}')">
+                            Copy bullet
+                        </button>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
     `;
 }
 
