@@ -4,7 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 import os
 
-from routers import analyze
+from routers import analyze, auth
 
 load_dotenv()
 
@@ -25,6 +25,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(analyze.router, prefix="/api", tags=["analyze"])
+app.include_router(auth.router, prefix="/api", tags=["auth"])
 
 # Create uploads directory if it doesn't exist
 os.makedirs("../uploads", exist_ok=True)

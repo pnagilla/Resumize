@@ -7,108 +7,390 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>Resumize</h1>
-            <p class="tagline">AI-Powered Resume & Job Description Matcher</p>
-        </header>
-
-        <main>
-            <form id="analyzeForm">
-                <div class="form-section">
-                    <label for="resume">Upload Resume (PDF or DOCX)</label>
-                    <div class="file-upload" id="dropZone">
-                        <input type="file" id="resume" name="resume" accept=".pdf,.docx,.doc" required>
-                        <div class="file-upload-content">
-                            <span class="upload-icon">📄</span>
-                            <p>Drag & drop your resume here or <span class="browse">browse</span></p>
-                            <p class="file-types">Supports PDF, DOCX</p>
-                        </div>
-                        <div class="file-selected" id="fileSelected" style="display: none;">
-                            <span class="file-icon">✓</span>
-                            <span class="file-name" id="fileName"></span>
-                            <button type="button" class="remove-file" id="removeFile">×</button>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="form-section">
-                    <label for="jobTitle">Job Title (optional)</label>
-                    <input type="text" id="jobTitle" name="jobTitle" placeholder="e.g., Senior Software Engineer">
-                </div>
-
-                <div class="form-section">
-                    <label for="jobDescription">Job Description <span class="optional-label">(Optional - for targeted analysis)</span></label>
-                    <textarea id="jobDescription" name="jobDescription" rows="10"
-                        placeholder="Paste the job description here for targeted skill matching, or leave empty for general ATS analysis..."></textarea>
-                </div>
-
-                <button type="submit" class="submit-btn" id="submitBtn">
-                    <span class="btn-text">Analyze Resume</span>
-                    <span class="btn-loading" style="display: none;">Analyzing...</span>
-                </button>
-            </form>
-
-            <div id="results" class="results" style="display: none;">
-                <h2>Analysis Results</h2>
-
-                <!-- Top Stats Row -->
-                <div class="stats-row">
-                    <div class="stat-card main-score">
-                        <div class="stat-value" id="overallScore">0%</div>
-                        <div class="stat-label">Overall ATS Score</div>
-                        <div class="stat-bar">
-                            <div class="stat-bar-fill" id="overallScoreBar"></div>
-                        </div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-value" id="totalSections">0</div>
-                        <div class="stat-label">Resume Sections</div>
-                        <div class="stat-sublabel">Analyzed for improvements</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-value improvements-count" id="totalImprovements">0</div>
-                        <div class="stat-label">Improvements</div>
-                        <div class="stat-sublabel">Suggested changes</div>
-                    </div>
-                </div>
-
-                <!-- Component Analysis - Sidebar Layout -->
-                <div class="analysis-layout">
-                    <!-- Left Sidebar -->
-                    <div class="analysis-sidebar">
-                        <div class="sidebar-header">
-                            <span class="sidebar-icon">⚙️</span>
-                            <span>Component Analysis</span>
-                        </div>
-                        <div class="sidebar-title">Resume Sections</div>
-                        <div class="section-list" id="sectionList">
-                            <!-- Sections will be dynamically inserted here -->
-                        </div>
-                    </div>
-
-                    <!-- Right Detail Panel -->
-                    <div class="analysis-detail" id="analysisDetail">
-                        <div class="detail-placeholder">
-                            <p>Select a section from the left to view detailed analysis</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- AI Justification -->
-                <div class="result-card">
-                    <h3>AI Analysis Summary</h3>
-                    <p id="scoreJustification" class="ai-summary"></p>
-                </div>
-
-                <button class="new-analysis-btn" id="newAnalysisBtn">Start New Analysis</button>
+    <!-- Navigation Bar -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="/" class="nav-logo">Resumize</a>
+            <div class="nav-buttons">
+                <button class="btn-login" onclick="openModal('loginModal')">Login</button>
+                <button class="btn-signup" onclick="openModal('signupModal')">Sign Up</button>
             </div>
-        </main>
+            <div class="nav-user" id="navUser" style="display: none;">
+                <span class="user-greeting">Welcome, <strong id="userUsername"></strong></span>
+                <button class="btn-logout" onclick="logout()">Logout</button>
+            </div>
+        </div>
+    </nav>
 
-        <footer>
-            <p>Built with Llama 3.3 + Deterministic ATS Engine</p>
-        </footer>
+    <!-- Login Modal -->
+    <div class="modal" id="loginModal">
+        <div class="modal-content">
+            <span class="modal-close" onclick="closeModal('loginModal')">&times;</span>
+            <h2>Welcome Back</h2>
+            <p class="modal-subtitle">Login to analyze your resume</p>
+            <form id="loginForm" onsubmit="handleLogin(event)">
+                <div class="form-group">
+                    <label for="loginEmail">Email</label>
+                    <input type="email" id="loginEmail" required placeholder="Enter your email">
+                </div>
+                <div class="form-group">
+                    <label for="loginPassword">Password</label>
+                    <input type="password" id="loginPassword" required placeholder="Enter your password">
+                </div>
+                <a href="#" class="forgot-password" onclick="openModal('forgotPasswordModal'); closeModal('loginModal');">Forgot Password?</a>
+                <button type="submit" class="btn-primary">Login</button>
+            </form>
+            <p class="modal-footer">Don't have an account? <a href="#" onclick="switchModal('loginModal', 'signupModal')">Sign up</a></p>
+        </div>
     </div>
+
+    <!-- Forgot Password Modal -->
+    <div class="modal" id="forgotPasswordModal">
+        <div class="modal-content">
+            <span class="modal-close" onclick="closeModal('forgotPasswordModal')">&times;</span>
+            <h2>Reset Password</h2>
+            <p class="modal-subtitle">Enter your email to receive reset instructions</p>
+            <form id="forgotPasswordForm" onsubmit="handleForgotPassword(event)">
+                <div class="form-group">
+                    <label for="forgotEmail">Email</label>
+                    <input type="email" id="forgotEmail" required placeholder="Enter your email">
+                </div>
+                <button type="submit" class="btn-primary">Send Reset Link</button>
+            </form>
+            <p class="modal-footer">Remember your password? <a href="#" onclick="switchModal('forgotPasswordModal', 'loginModal')">Back to Login</a></p>
+        </div>
+    </div>
+
+    <!-- Signup Modal -->
+    <div class="modal" id="signupModal">
+        <div class="modal-content">
+            <span class="modal-close" onclick="closeModal('signupModal')">&times;</span>
+            <h2>Create Account</h2>
+            <p class="modal-subtitle">Start optimizing your resume today</p>
+            <form id="signupForm" onsubmit="handleSignup(event)">
+                <div class="form-group">
+                    <label for="signupName">Full Name</label>
+                    <input type="text" id="signupName" required placeholder="Enter your full name">
+                </div>
+                <div class="form-group">
+                    <label for="signupUsername">Username</label>
+                    <input type="text" id="signupUsername" required placeholder="Choose a username" minlength="3">
+                </div>
+                <div class="form-group">
+                    <label for="signupEmail">Email</label>
+                    <input type="email" id="signupEmail" required placeholder="Enter your email">
+                </div>
+                <div class="form-group">
+                    <label for="signupPassword">Password</label>
+                    <input type="password" id="signupPassword" required placeholder="Create a password" minlength="6">
+                </div>
+                <button type="submit" class="btn-primary">Create Account</button>
+            </form>
+            <p class="modal-footer">Already have an account? <a href="#" onclick="switchModal('signupModal', 'loginModal')">Login</a></p>
+        </div>
+    </div>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container">
+            <h1 class="hero-title">Resumize</h1>
+            <p class="hero-tagline">AI-Powered Resume Analysis Built for ATS Success</p>
+            <p class="hero-description">Get your resume past the bots and into human hands. Our intelligent analysis helps you optimize for Applicant Tracking Systems.</p>
+            <button class="btn-cta" onclick="scrollToAnalyze()">Analyze My Resume</button>
+        </div>
+    </section>
+
+    <!-- What is ATS Section -->
+    <section class="ats-section">
+        <div class="container">
+            <h2 class="section-title">What is an ATS?</h2>
+            <p class="section-subtitle">Understanding the gatekeeper between you and your dream job</p>
+
+            <div class="ats-content">
+                <div class="ats-explanation">
+                    <div class="ats-card">
+                        <div class="ats-icon">🤖</div>
+                        <h3>Applicant Tracking System</h3>
+                        <p>An ATS is software used by 99% of Fortune 500 companies to filter resumes before a human ever sees them. It scans for keywords, formatting, and relevant experience.</p>
+                    </div>
+                    <div class="ats-card">
+                        <div class="ats-icon">📊</div>
+                        <h3>The Hard Truth</h3>
+                        <p><strong>75% of resumes</strong> are rejected by ATS before reaching a recruiter. Even qualified candidates get filtered out due to poor formatting or missing keywords.</p>
+                    </div>
+                    <div class="ats-card">
+                        <div class="ats-icon">🎯</div>
+                        <h3>Why It Matters</h3>
+                        <p>Your resume might be perfect for the job, but if it's not optimized for ATS, it won't matter. The right keywords and structure can make all the difference.</p>
+                    </div>
+                </div>
+
+                <!-- ATS Flowchart -->
+                <div class="ats-flowchart">
+                    <h3>How ATS Filters Your Resume</h3>
+                    <div class="flowchart">
+                        <div class="flow-step">
+                            <div class="flow-icon">📄</div>
+                            <div class="flow-label">You Submit Resume</div>
+                        </div>
+                        <div class="flow-arrow">→</div>
+                        <div class="flow-step">
+                            <div class="flow-icon">🔍</div>
+                            <div class="flow-label">ATS Scans & Parses</div>
+                        </div>
+                        <div class="flow-arrow">→</div>
+                        <div class="flow-step decision">
+                            <div class="flow-icon">⚖️</div>
+                            <div class="flow-label">Keyword Match?</div>
+                        </div>
+                        <div class="flow-branches">
+                            <div class="flow-branch reject">
+                                <div class="flow-arrow-down">↓</div>
+                                <div class="flow-step fail">
+                                    <div class="flow-icon">❌</div>
+                                    <div class="flow-label">Rejected</div>
+                                </div>
+                            </div>
+                            <div class="flow-branch accept">
+                                <div class="flow-arrow-down">↓</div>
+                                <div class="flow-step success">
+                                    <div class="flow-icon">✅</div>
+                                    <div class="flow-label">Human Review</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works Section -->
+    <section class="how-it-works">
+        <div class="container">
+            <h2 class="section-title">How Resumize Works</h2>
+            <p class="section-subtitle">Three simple steps to an ATS-optimized resume</p>
+
+            <div class="steps-container">
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <div class="step-icon">📤</div>
+                    <h3>Upload Your Resume</h3>
+                    <p>Upload your resume in PDF or DOCX format. Optionally paste the job description for targeted analysis.</p>
+                </div>
+                <div class="step-connector"></div>
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <div class="step-icon">🔬</div>
+                    <h3>AI Analysis</h3>
+                    <p>Our AI engine analyzes your resume section by section, checking formatting, keywords, and ATS compatibility.</p>
+                </div>
+                <div class="step-connector"></div>
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <div class="step-icon">📈</div>
+                    <h3>Get Your Score & Tips</h3>
+                    <p>Receive a detailed score breakdown with actionable suggestions to improve your resume's ATS performance.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Analyze Section (Protected) -->
+    <section class="analyze-section" id="analyzeSection">
+        <div class="container">
+            <!-- Login Required Message -->
+            <div class="login-required" id="loginRequired">
+                <div class="lock-icon">🔒</div>
+                <h2>Login Required</h2>
+                <p>Create a free account to analyze your resume and get personalized ATS optimization tips.</p>
+                <button class="btn-cta" onclick="openModal('signupModal')">Sign Up Free</button>
+                <p class="login-link">Already have an account? <a href="#" onclick="openModal('loginModal')">Login</a></p>
+            </div>
+
+            <!-- Analyze Form (shown when logged in) -->
+            <div id="analyzeContent" style="display: none;">
+                <h2 class="section-title">Analyze Your Resume</h2>
+                <form id="analyzeForm">
+                    <div class="form-section">
+                        <label for="resume">Upload Resume (PDF or DOCX)</label>
+                        <div class="file-upload" id="dropZone">
+                            <input type="file" id="resume" name="resume" accept=".pdf,.docx,.doc" required>
+                            <div class="file-upload-content">
+                                <span class="upload-icon">📄</span>
+                                <p>Drag & drop your resume here or <span class="browse">browse</span></p>
+                                <p class="file-types">Supports PDF, DOCX</p>
+                            </div>
+                            <div class="file-selected" id="fileSelected" style="display: none;">
+                                <span class="file-icon">✓</span>
+                                <span class="file-name" id="fileName"></span>
+                                <button type="button" class="remove-file" id="removeFile">×</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <label for="jobTitle">Job Title (optional)</label>
+                        <input type="text" id="jobTitle" name="jobTitle" placeholder="e.g., Senior Software Engineer">
+                    </div>
+
+                    <div class="form-section">
+                        <label for="jobDescription">Job Description <span class="optional-label">(Optional - for targeted analysis)</span></label>
+                        <textarea id="jobDescription" name="jobDescription" rows="10"
+                            placeholder="Paste the job description here for targeted skill matching, or leave empty for general ATS analysis..."></textarea>
+                    </div>
+
+                    <button type="submit" class="submit-btn" id="submitBtn">
+                        <span class="btn-text">Analyze Resume</span>
+                        <span class="btn-loading" style="display: none;">Analyzing...</span>
+                    </button>
+                </form>
+
+                <div id="results" class="results" style="display: none;">
+                    <h2>Analysis Results</h2>
+
+                    <!-- Top Stats Row -->
+                    <div class="stats-row">
+                        <div class="stat-card main-score">
+                            <div class="stat-value" id="overallScore">0%</div>
+                            <div class="stat-label">Overall ATS Score</div>
+                            <div class="stat-bar">
+                                <div class="stat-bar-fill" id="overallScoreBar"></div>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="totalSections">0</div>
+                            <div class="stat-label">Resume Sections</div>
+                            <div class="stat-sublabel">Analyzed for improvements</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value improvements-count" id="totalImprovements">0</div>
+                            <div class="stat-label">Improvements</div>
+                            <div class="stat-sublabel">Suggested changes</div>
+                        </div>
+                    </div>
+
+                    <!-- Component Analysis - Sidebar Layout -->
+                    <div class="analysis-layout">
+                        <!-- Left Sidebar -->
+                        <div class="analysis-sidebar">
+                            <div class="sidebar-header">
+                                <span class="sidebar-icon">⚙️</span>
+                                <span>Component Analysis</span>
+                            </div>
+                            <div class="sidebar-title">Resume Sections</div>
+                            <div class="section-list" id="sectionList">
+                                <!-- Sections will be dynamically inserted here -->
+                            </div>
+                        </div>
+
+                        <!-- Right Detail Panel -->
+                        <div class="analysis-detail" id="analysisDetail">
+                            <div class="detail-placeholder">
+                                <p>Select a section from the left to view detailed analysis</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- AI Justification -->
+                    <div class="result-card">
+                        <h3>AI Analysis Summary</h3>
+                        <p id="scoreJustification" class="ai-summary"></p>
+                    </div>
+
+                    <button class="new-analysis-btn" id="newAnalysisBtn">Start New Analysis</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FAQ Section -->
+    <section class="faq-section">
+        <div class="container">
+            <h2 class="section-title">Frequently Asked Questions</h2>
+            <p class="section-subtitle">Got questions? We've got answers.</p>
+
+            <div class="faq-container">
+                <div class="faq-item">
+                    <button class="faq-question" onclick="toggleFaq(this)">
+                        <span>What file formats do you support?</span>
+                        <span class="faq-icon">+</span>
+                    </button>
+                    <div class="faq-answer">
+                        <p>We support PDF and DOCX (Microsoft Word) formats. These are the most common formats accepted by ATS systems, so we recommend using one of these when applying for jobs.</p>
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <button class="faq-question" onclick="toggleFaq(this)">
+                        <span>Is my resume data secure?</span>
+                        <span class="faq-icon">+</span>
+                    </button>
+                    <div class="faq-answer">
+                        <p>Yes, your privacy is our priority. We analyze your resume in real-time and don't store the actual document. Your analysis history is saved to your account for reference, but you can delete it anytime.</p>
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <button class="faq-question" onclick="toggleFaq(this)">
+                        <span>Do I need to paste a job description?</span>
+                        <span class="faq-icon">+</span>
+                    </button>
+                    <div class="faq-answer">
+                        <p>It's optional but recommended. Without a job description, we provide a general ATS compatibility analysis. With a job description, we can match specific keywords and skills, giving you targeted suggestions for that particular role.</p>
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <button class="faq-question" onclick="toggleFaq(this)">
+                        <span>What's a good ATS score?</span>
+                        <span class="faq-icon">+</span>
+                    </button>
+                    <div class="faq-answer">
+                        <p>Generally, a score of 70% or above is considered good. Scores above 85% are excellent. However, the most important thing is addressing the specific issues identified in your analysis. Even small improvements can make a big difference.</p>
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <button class="faq-question" onclick="toggleFaq(this)">
+                        <span>How accurate is the AI analysis?</span>
+                        <span class="faq-icon">+</span>
+                    </button>
+                    <div class="faq-answer">
+                        <p>Our analysis combines AI-powered content review with a deterministic scoring engine that mimics real ATS behavior. We analyze formatting, keywords, structure, and content quality. While no tool can guarantee 100% accuracy (every ATS is different), our analysis covers the most common factors.</p>
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <button class="faq-question" onclick="toggleFaq(this)">
+                        <span>Can I analyze multiple resumes?</span>
+                        <span class="faq-icon">+</span>
+                    </button>
+                    <div class="faq-answer">
+                        <p>Yes! Once logged in, you can analyze as many resumes as you want. This is useful if you have different versions of your resume for different types of roles, or if you want to track improvements over time.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <h3>Resumize</h3>
+                    <p>AI-Powered Resume Analysis Built for ATS Success</p>
+                </div>
+                <div class="footer-links">
+                    <p>Built with Llama 3.3 + Deterministic ATS Engine</p>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2024 Resumize. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
 
     <script src="app.js"></script>
 </body>

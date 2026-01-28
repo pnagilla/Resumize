@@ -1,18 +1,5 @@
 const API_URL = 'http://localhost:8000/api';
 
-// DOM Elements
-const form = document.getElementById('analyzeForm');
-const resumeInput = document.getElementById('resume');
-const dropZone = document.getElementById('dropZone');
-const fileSelected = document.getElementById('fileSelected');
-const fileName = document.getElementById('fileName');
-const removeFileBtn = document.getElementById('removeFile');
-const submitBtn = document.getElementById('submitBtn');
-const btnText = submitBtn.querySelector('.btn-text');
-const btnLoading = submitBtn.querySelector('.btn-loading');
-const results = document.getElementById('results');
-const newAnalysisBtn = document.getElementById('newAnalysisBtn');
-
 // Section icons mapping
 const sectionIcons = {
     'Contact Information': '📧',
@@ -24,65 +11,367 @@ const sectionIcons = {
     'Formatting & Structure': '📐'
 };
 
-// File upload handling
-resumeInput.addEventListener('change', handleFileSelect);
-removeFileBtn.addEventListener('click', clearFile);
+// Store sections data globally for click handling
+let sectionsData = [];
+let matchedSkillsData = [];
+let missingSkillsData = [];
+let rewrittenBulletsData = [];
+let hasJobDescription = false;
 
-dropZone.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    dropZone.classList.add('dragover');
+// Current user state
+let currentUser = null;
+
+// ==================== INITIALIZATION ====================
+document.addEventListener('DOMContentLoaded', () => {
+    // Check if user is logged in
+    checkAuthState();
+
+    // Initialize form elements if they exist
+    initializeFormElements();
 });
 
-dropZone.addEventListener('dragleave', () => {
-    dropZone.classList.remove('dragover');
-});
+function initializeFormElements() {
+    const resumeInput = document.getElementById('resume');
+    const dropZone = document.getElementById('dropZone');
+    const removeFileBtn = document.getElementById('removeFile');
+    const form = document.getElementById('analyzeForm');
+    const newAnalysisBtn = document.getElementById('newAnalysisBtn');
 
-dropZone.addEventListener('drop', (e) => {
-    e.preventDefault();
-    dropZone.classList.remove('dragover');
-    if (e.dataTransfer.files.length) {
-        resumeInput.files = e.dataTransfer.files;
-        handleFileSelect();
+    if (resumeInput) {
+        resumeInput.addEventListener('change', handleFileSelect);
+    }
+
+    if (removeFileBtn) {
+        removeFileBtn.addEventListener('click', clearFile);
+    }
+
+    if (dropZone) {
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            if (e.dataTransfer.files.length) {
+                resumeInput.files = e.dataTransfer.files;
+                handleFileSelect();
+            }
+        });
+    }
+
+    if (form) {
+        form.addEventListener('submit', handleFormSubmit);
+    }
+
+    if (newAnalysisBtn) {
+        newAnalysisBtn.addEventListener('click', startNewAnalysis);
+    }
+}
+
+// ==================== AUTH STATE ====================
+function checkAuthState() {
+    const savedUser = localStorage.getItem('resumize_user');
+    if (savedUser) {
+        currentUser = JSON.parse(savedUser);
+        updateUIForLoggedInUser();
+    } else {
+        updateUIForLoggedOutUser();
+    }
+}
+
+function updateUIForLoggedInUser() {
+    // Update navbar
+    const navButtons = document.querySelector('.nav-buttons');
+    const navUser = document.getElementById('navUser');
+    const userUsername = document.getElementById('userUsername');
+
+    if (navButtons) navButtons.style.display = 'none';
+    if (navUser) {
+        navUser.style.display = 'flex';
+        if (userUsername) userUsername.textContent = currentUser.username || currentUser.name;
+    }
+
+    // Show analyze content, hide login required
+    const loginRequired = document.getElementById('loginRequired');
+    const analyzeContent = document.getElementById('analyzeContent');
+
+    if (loginRequired) loginRequired.style.display = 'none';
+    if (analyzeContent) analyzeContent.style.display = 'block';
+}
+
+function updateUIForLoggedOutUser() {
+    // Update navbar
+    const navButtons = document.querySelector('.nav-buttons');
+    const navUser = document.getElementById('navUser');
+
+    if (navButtons) navButtons.style.display = 'flex';
+    if (navUser) navUser.style.display = 'none';
+
+    // Hide analyze content, show login required
+    const loginRequired = document.getElementById('loginRequired');
+    const analyzeContent = document.getElementById('analyzeContent');
+
+    if (loginRequired) loginRequired.style.display = 'block';
+    if (analyzeContent) analyzeContent.style.display = 'none';
+}
+
+// ==================== MODAL FUNCTIONS ====================
+function openModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) {
+        modal.classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+}
+
+function closeModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) {
+        modal.classList.remove('active');
+        document.body.style.overflow = '';
+    }
+}
+
+function switchModal(fromModalId, toModalId) {
+    closeModal(fromModalId);
+    setTimeout(() => openModal(toModalId), 100);
+}
+
+// Close modal when clicking outside
+document.addEventListener('click', (e) => {
+    if (e.target.classList.contains('modal')) {
+        e.target.classList.remove('active');
+        document.body.style.overflow = '';
     }
 });
 
+// Close modal with Escape key
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        document.querySelectorAll('.modal.active').forEach(modal => {
+            modal.classList.remove('active');
+        });
+        document.body.style.overflow = '';
+    }
+});
+
+// ==================== AUTH HANDLERS ====================
+async function handleLogin(event) {
+    event.preventDefault();
+
+    const email = document.getElementById('loginEmail').value;
+    const password = document.getElementById('loginPassword').value;
+
+    try {
+        const response = await fetch(`${API_URL}/auth/login`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ email, password })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Login failed');
+        }
+
+        const data = await response.json();
+        currentUser = data.user;
+        localStorage.setItem('resumize_user', JSON.stringify(currentUser));
+        localStorage.setItem('resumize_token', data.token);
+
+        closeModal('loginModal');
+        updateUIForLoggedInUser();
+
+        // Scroll to analyze section
+        scrollToAnalyze();
+
+    } catch (error) {
+        alert(`Login failed: ${error.message}`);
+    }
+}
+
+async function handleSignup(event) {
+    event.preventDefault();
+
+    const name = document.getElementById('signupName').value;
+    const username = document.getElementById('signupUsername').value;
+    const email = document.getElementById('signupEmail').value;
+    const password = document.getElementById('signupPassword').value;
+
+    try {
+        const response = await fetch(`${API_URL}/auth/signup`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ name, username, email, password })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Signup failed');
+        }
+
+        const data = await response.json();
+        currentUser = data.user;
+        localStorage.setItem('resumize_user', JSON.stringify(currentUser));
+        localStorage.setItem('resumize_token', data.token);
+
+        closeModal('signupModal');
+        updateUIForLoggedInUser();
+
+        // Scroll to analyze section
+        scrollToAnalyze();
+
+    } catch (error) {
+        alert(`Signup failed: ${error.message}`);
+    }
+}
+
+function logout() {
+    currentUser = null;
+    localStorage.removeItem('resumize_user');
+    localStorage.removeItem('resumize_token');
+    updateUIForLoggedOutUser();
+
+    // Reset form and results if visible
+    const form = document.getElementById('analyzeForm');
+    const results = document.getElementById('results');
+    if (form) {
+        form.reset();
+        form.style.display = 'block';
+    }
+    if (results) {
+        results.style.display = 'none';
+    }
+    clearFile();
+}
+
+async function handleForgotPassword(event) {
+    event.preventDefault();
+
+    const email = document.getElementById('forgotEmail').value;
+
+    try {
+        const response = await fetch(`${API_URL}/auth/forgot-password`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ email })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to send reset link');
+        }
+
+        alert('Password reset link sent to your email!');
+        closeModal('forgotPasswordModal');
+        openModal('loginModal');
+
+    } catch (error) {
+        // For now, show success message anyway (since we don't have email service)
+        alert('If an account exists with this email, you will receive a password reset link.');
+        closeModal('forgotPasswordModal');
+        openModal('loginModal');
+    }
+}
+
+// ==================== FAQ TOGGLE ====================
+function toggleFaq(button) {
+    const faqItem = button.parentElement;
+    const isActive = faqItem.classList.contains('active');
+
+    // Close all FAQ items
+    document.querySelectorAll('.faq-item').forEach(item => {
+        item.classList.remove('active');
+    });
+
+    // Open clicked item if it wasn't active
+    if (!isActive) {
+        faqItem.classList.add('active');
+    }
+}
+
+// ==================== SCROLL FUNCTION ====================
+function scrollToAnalyze() {
+    const analyzeSection = document.getElementById('analyzeSection');
+    if (analyzeSection) {
+        analyzeSection.scrollIntoView({ behavior: 'smooth' });
+    }
+}
+
+// ==================== FILE HANDLING ====================
 function handleFileSelect() {
-    if (resumeInput.files.length > 0) {
+    const resumeInput = document.getElementById('resume');
+    const fileName = document.getElementById('fileName');
+    const dropZone = document.getElementById('dropZone');
+    const fileSelected = document.getElementById('fileSelected');
+
+    if (resumeInput && resumeInput.files.length > 0) {
         const file = resumeInput.files[0];
-        fileName.textContent = file.name;
-        dropZone.querySelector('.file-upload-content').style.display = 'none';
-        fileSelected.style.display = 'flex';
+        if (fileName) fileName.textContent = file.name;
+        const uploadContent = dropZone?.querySelector('.file-upload-content');
+        if (uploadContent) uploadContent.style.display = 'none';
+        if (fileSelected) fileSelected.style.display = 'flex';
     }
 }
 
 function clearFile() {
-    resumeInput.value = '';
-    dropZone.querySelector('.file-upload-content').style.display = 'block';
-    fileSelected.style.display = 'none';
+    const resumeInput = document.getElementById('resume');
+    const dropZone = document.getElementById('dropZone');
+    const fileSelected = document.getElementById('fileSelected');
+
+    if (resumeInput) resumeInput.value = '';
+    const uploadContent = dropZone?.querySelector('.file-upload-content');
+    if (uploadContent) uploadContent.style.display = 'block';
+    if (fileSelected) fileSelected.style.display = 'none';
 }
 
-// Form submission
-form.addEventListener('submit', async (e) => {
+// ==================== FORM SUBMISSION ====================
+async function handleFormSubmit(e) {
     e.preventDefault();
+
+    const resumeInput = document.getElementById('resume');
+    const submitBtn = document.getElementById('submitBtn');
+    const btnText = submitBtn?.querySelector('.btn-text');
+    const btnLoading = submitBtn?.querySelector('.btn-loading');
+
+    if (!resumeInput?.files[0]) {
+        alert('Please select a resume file');
+        return;
+    }
 
     const formData = new FormData();
     formData.append('resume', resumeInput.files[0]);
-    formData.append('job_description', document.getElementById('jobDescription').value);
+    formData.append('job_description', document.getElementById('jobDescription')?.value || '');
 
-    const jobTitle = document.getElementById('jobTitle').value;
+    const jobTitle = document.getElementById('jobTitle')?.value;
     if (jobTitle) {
         formData.append('job_title', jobTitle);
     }
 
     // Show loading state
-    submitBtn.disabled = true;
-    btnText.style.display = 'none';
-    btnLoading.style.display = 'inline';
+    if (submitBtn) submitBtn.disabled = true;
+    if (btnText) btnText.style.display = 'none';
+    if (btnLoading) btnLoading.style.display = 'inline';
 
     try {
         const response = await fetch(`${API_URL}/analyze`, {
             method: 'POST',
-            body: formData
+            body: formData,
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('resumize_token') || ''}`
+            }
         });
 
         if (!response.ok) {
@@ -96,11 +385,26 @@ form.addEventListener('submit', async (e) => {
     } catch (error) {
         alert(`Error: ${error.message}`);
     } finally {
-        submitBtn.disabled = false;
-        btnText.style.display = 'inline';
-        btnLoading.style.display = 'none';
+        if (submitBtn) submitBtn.disabled = false;
+        if (btnText) btnText.style.display = 'inline';
+        if (btnLoading) btnLoading.style.display = 'none';
     }
-});
+}
+
+// ==================== START NEW ANALYSIS ====================
+function startNewAnalysis() {
+    const form = document.getElementById('analyzeForm');
+    const results = document.getElementById('results');
+
+    if (form) {
+        form.reset();
+        form.style.display = 'block';
+    }
+    if (results) {
+        results.style.display = 'none';
+    }
+    clearFile();
+}
 
 // Get score class based on value
 function getScoreClass(score) {
@@ -109,52 +413,58 @@ function getScoreClass(score) {
     return 'low';
 }
 
-// Store sections data globally for click handling
-let sectionsData = [];
-let matchedSkillsData = [];
-let missingSkillsData = [];
-let rewrittenBulletsData = [];
-let hasJobDescription = false;
-
-// Display results
+// ==================== DISPLAY RESULTS ====================
 function displayResults(data) {
     const { analysis } = data;
+    const form = document.getElementById('analyzeForm');
+    const results = document.getElementById('results');
 
     // Top Stats
     const overallScore = analysis.section_analysis?.overall_score || analysis.match_score;
-    document.getElementById('overallScore').textContent = `${overallScore}%`;
-    document.getElementById('overallScoreBar').style.width = `${overallScore}%`;
+    const overallScoreEl = document.getElementById('overallScore');
+    const overallScoreBar = document.getElementById('overallScoreBar');
+
+    if (overallScoreEl) overallScoreEl.textContent = `${overallScore}%`;
+    if (overallScoreBar) overallScoreBar.style.width = `${overallScore}%`;
 
     if (analysis.section_analysis) {
-        document.getElementById('totalSections').textContent = analysis.section_analysis.total_sections;
-        document.getElementById('totalImprovements').textContent = analysis.section_analysis.total_improvements;
+        const totalSections = document.getElementById('totalSections');
+        const totalImprovements = document.getElementById('totalImprovements');
+
+        if (totalSections) totalSections.textContent = analysis.section_analysis.total_sections;
+        if (totalImprovements) totalImprovements.textContent = analysis.section_analysis.total_improvements;
 
         // Store sections data
         sectionsData = analysis.section_analysis.sections;
 
         // Render sidebar section list
         const sectionList = document.getElementById('sectionList');
-        sectionList.innerHTML = sectionsData.map((section, index) => {
-            const scoreClass = getScoreClass(section.score);
-            const icon = sectionIcons[section.name] || '📋';
+        if (sectionList) {
+            sectionList.innerHTML = sectionsData.map((section, index) => {
+                const scoreClass = getScoreClass(section.score);
+                const icon = sectionIcons[section.name] || '📋';
 
-            return `
-                <div class="section-item" data-index="${index}" onclick="showSectionDetail(${index})">
-                    <div class="section-item-left">
-                        <span class="section-item-icon">${icon}</span>
-                        <span class="section-item-name">${escapeHtml(section.name)}</span>
+                return `
+                    <div class="section-item" data-index="${index}" onclick="showSectionDetail(${index})">
+                        <div class="section-item-left">
+                            <span class="section-item-icon">${icon}</span>
+                            <span class="section-item-name">${escapeHtml(section.name)}</span>
+                        </div>
+                        <span class="section-item-score ${scoreClass}">${section.score}%</span>
                     </div>
-                    <span class="section-item-score ${scoreClass}">${section.score}%</span>
-                </div>
-            `;
-        }).join('');
+                `;
+            }).join('');
+        }
 
         // Show first section by default
         showSectionDetail(0);
     }
 
     // AI Summary
-    document.getElementById('scoreJustification').textContent = analysis.match_justification;
+    const scoreJustification = document.getElementById('scoreJustification');
+    if (scoreJustification) {
+        scoreJustification.textContent = analysis.match_justification;
+    }
 
     // Check if job description was provided (based on ATS breakdown)
     hasJobDescription = analysis.ats_score?.breakdown?.skill_match?.matched_skills?.length > 0 ||
@@ -166,11 +476,11 @@ function displayResults(data) {
     rewrittenBulletsData = analysis.rewritten_bullets || [];
 
     // Show results, hide form
-    form.style.display = 'none';
-    results.style.display = 'block';
+    if (form) form.style.display = 'none';
+    if (results) results.style.display = 'block';
 
     // Scroll to results
-    results.scrollIntoView({ behavior: 'smooth' });
+    results?.scrollIntoView({ behavior: 'smooth' });
 }
 
 // Show section detail in right panel
@@ -250,19 +560,21 @@ function showSectionDetail(index) {
         sectionSpecificHtml = buildBulletsDetailHtml();
     }
 
-    detailPanel.innerHTML = `
-        <div class="detail-section-header">
-            <span class="detail-section-icon">${icon}</span>
-            <div class="detail-section-info">
-                <h3>${escapeHtml(section.name)}</h3>
-                <span class="score-badge ${scoreClass}">${section.score}% Score</span>
+    if (detailPanel) {
+        detailPanel.innerHTML = `
+            <div class="detail-section-header">
+                <span class="detail-section-icon">${icon}</span>
+                <div class="detail-section-info">
+                    <h3>${escapeHtml(section.name)}</h3>
+                    <span class="score-badge ${scoreClass}">${section.score}% Score</span>
+                </div>
             </div>
-        </div>
-        ${issuesHtml}
-        ${improvementsHtml}
-        ${goodHtml}
-        ${sectionSpecificHtml}
-    `;
+            ${issuesHtml}
+            ${improvementsHtml}
+            ${goodHtml}
+            ${sectionSpecificHtml}
+        `;
+    }
 }
 
 // Build HTML for skills detail (matched and missing skills)
@@ -345,15 +657,7 @@ function buildBulletsDetailHtml() {
     `;
 }
 
-// New analysis
-newAnalysisBtn.addEventListener('click', () => {
-    form.reset();
-    clearFile();
-    results.style.display = 'none';
-    form.style.display = 'block';
-});
-
-// Utility functions
+// ==================== UTILITY FUNCTIONS ====================
 function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
