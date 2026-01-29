@@ -1,4 +1,4 @@
-const API_URL = 'http://localhost:8000/api';
+const API_URL = window.location.origin + '/api';
 
 // Section icons mapping
 const sectionIcons = {

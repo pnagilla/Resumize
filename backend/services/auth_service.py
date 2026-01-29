@@ -10,7 +10,7 @@ import bcrypt
 
 logger = logging.getLogger(__name__)
 
-DATABASE_PATH = "../data/resumize.db"
+DATABASE_PATH = os.getenv("DATABASE_PATH", "../data/resumize.db")
 
 
 def get_connection():

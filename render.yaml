@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: resumize
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    region: oregon
+    plan: starter
+    disk:
+      name: resumize-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: DATABASE_PATH
+        value: /data/resumize.db
+      - key: UPLOAD_DIR
+        value: /tmp/uploads
+      - key: ALLOWED_ORIGINS
+        value: https://resumize.nagilla.me
+      - key: GROQ_API_KEY
+        sync: false
+    customDomains:
+      - name: resumize.nagilla.me

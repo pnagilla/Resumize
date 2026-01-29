@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from dotenv import load_dotenv
 import os
@@ -19,7 +19,7 @@ app = FastAPI(
 )
 
 # --- CORS middleware ---
-ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000,http://localhost:8000,http://127.0.0.1:8000").split(",")
 
 app.add_middleware(
     CORSMiddleware,
@@ -84,14 +84,27 @@ app.include_router(analyze.router, prefix="/api", tags=["analyze"])
 app.include_router(auth.router, prefix="/api", tags=["auth"])
 
 # Create uploads directory if it doesn't exist
-os.makedirs("../uploads", exist_ok=True)
+UPLOAD_DIR = os.getenv("UPLOAD_DIR", "../uploads")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
-@app.get("/")
-async def root():
-    return {"message": "Welcome to Resumize API", "docs": "/docs"}
-
-
+# Health check
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
+
+
+# --- Serve frontend static files ---
+FRONTEND_DIR = os.getenv(
+    "FRONTEND_DIR",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "frontend")
+)
+
+
+@app.get("/")
+async def serve_index():
+    return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
+
+
+# Mount static files last so /api/* and /health take priority
+app.mount("/", StaticFiles(directory=FRONTEND_DIR), name="frontend")

@@ -10,8 +10,10 @@ logger = logging.getLogger(__name__)
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 
 
-async def save_upload_file(file: UploadFile, upload_dir: str = "../uploads") -> str:
+async def save_upload_file(file: UploadFile, upload_dir: str = None) -> str:
     """Save uploaded file and return the file path."""
+    if upload_dir is None:
+        upload_dir = os.getenv("UPLOAD_DIR", "../uploads")
     os.makedirs(upload_dir, exist_ok=True)
 
     content = await file.read()

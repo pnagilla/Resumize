@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Optional
 from models.schemas import AnalysisResult, AnalysisResponse, HistoryItem
 
-DATABASE_PATH = "../data/resumize.db"
+DATABASE_PATH = os.getenv("DATABASE_PATH", "../data/resumize.db")
 
 
 def get_connection():
