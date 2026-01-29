@@ -4,14 +4,10 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     region: oregon
-    plan: starter
-    disk:
-      name: resumize-data
-      mountPath: /data
-      sizeGB: 1
+    plan: free
     envVars:
       - key: DATABASE_PATH
-        value: /data/resumize.db
+        value: /tmp/resumize.db
       - key: UPLOAD_DIR
         value: /tmp/uploads
       - key: ALLOWED_ORIGINS
