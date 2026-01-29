@@ -1,30 +1,40 @@
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Header
 from typing import Optional
 
 from models.schemas import AnalysisResponse, HistoryResponse
 from services.parser_service import save_upload_file, parse_resume, cleanup_file
 from services.claude_service import analyze_resume
 from services.db_service import save_analysis, get_analysis, get_history
+from services.auth_service import validate_token
 
 router = APIRouter()
+
+
+def _get_user(authorization: str = Header(default="")):
+    """Extract and validate user from Authorization header."""
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid authorization token")
+    token = authorization[7:]
+    user = validate_token(token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    return user
 
 
 @router.post("/analyze", response_model=AnalysisResponse)
 async def analyze(
     resume: UploadFile = File(..., description="Resume file (PDF or DOCX)"),
     job_description: Optional[str] = Form("", description="Job description text (optional)"),
-    job_title: Optional[str] = Form(None, description="Job title (optional)")
+    job_title: Optional[str] = Form(None, description="Job title (optional)"),
+    authorization: str = Header(default="")
 ):
     """
     Analyze a resume for ATS compatibility and optionally against a job description.
 
-    - **resume**: Upload your resume (PDF or DOCX format)
-    - **job_description**: Paste the job description text (optional - for targeted analysis)
-    - **job_title**: Optional job title for reference
-
-    Returns ATS score, section analysis, and improvement suggestions.
-    If job description is provided, also returns skill matching and rewritten bullets.
+    Requires authentication via Bearer token.
     """
+    user = _get_user(authorization)
+
     # Validate file type
     if not resume.filename:
         raise HTTPException(status_code=400, detail="No file uploaded")
@@ -57,7 +67,8 @@ async def analyze(
             job_description=job_description,
             resume_text=resume_text,
             analysis=analysis,
-            job_title=job_title
+            job_title=job_title,
+            user_id=user["id"]
         )
 
         return AnalysisResponse(
@@ -73,23 +84,35 @@ async def analyze(
 
 
 @router.get("/history", response_model=HistoryResponse)
-async def history(limit: int = 20, offset: int = 0):
+async def history(
+    limit: int = 20,
+    offset: int = 0,
+    authorization: str = Header(default="")
+):
     """
-    Get analysis history.
+    Get analysis history for the authenticated user.
+    """
+    user = _get_user(authorization)
 
-    - **limit**: Maximum number of items to return (default: 20)
-    - **offset**: Number of items to skip (default: 0)
-    """
-    items = get_history(limit=limit, offset=offset)
+    # Bounds validation
+    limit = min(max(1, limit), 100)
+    offset = max(0, offset)
+
+    items = get_history(limit=limit, offset=offset, user_id=user["id"])
     return HistoryResponse(items=items)
 
 
 @router.get("/analysis/{analysis_id}", response_model=AnalysisResponse)
-async def get_analysis_by_id(analysis_id: int):
+async def get_analysis_by_id(
+    analysis_id: int,
+    authorization: str = Header(default="")
+):
     """
-    Get a specific analysis by ID.
+    Get a specific analysis by ID. Only returns analyses owned by the authenticated user.
     """
-    result = get_analysis(analysis_id)
+    user = _get_user(authorization)
+
+    result = get_analysis(analysis_id, user_id=user["id"])
     if not result:
         raise HTTPException(status_code=404, detail="Analysis not found")
     return result

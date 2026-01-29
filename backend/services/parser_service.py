@@ -1,15 +1,41 @@
 import os
+import uuid
+import logging
 from PyPDF2 import PdfReader
 from docx import Document
 from fastapi import UploadFile, HTTPException
+
+logger = logging.getLogger(__name__)
+
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 
 
 async def save_upload_file(file: UploadFile, upload_dir: str = "../uploads") -> str:
     """Save uploaded file and return the file path."""
     os.makedirs(upload_dir, exist_ok=True)
-    file_path = os.path.join(upload_dir, file.filename)
 
     content = await file.read()
+
+    # Enforce file size limit
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail="File too large. Maximum size is 10 MB."
+        )
+
+    # Sanitize filename: use UUID to prevent path traversal
+    original_ext = os.path.splitext(file.filename or "unknown.pdf")[1].lower()
+    if original_ext not in [".pdf", ".docx", ".doc"]:
+        original_ext = ".pdf"
+    safe_filename = f"{uuid.uuid4().hex}{original_ext}"
+    file_path = os.path.join(upload_dir, safe_filename)
+
+    # Verify the resolved path stays within the upload directory
+    abs_upload_dir = os.path.abspath(upload_dir)
+    abs_file_path = os.path.abspath(file_path)
+    if not abs_file_path.startswith(abs_upload_dir):
+        raise HTTPException(status_code=400, detail="Invalid file path")
+
     with open(file_path, "wb") as f:
         f.write(content)
 
@@ -25,7 +51,7 @@ def parse_pdf(file_path: str) -> str:
             text += page.extract_text() + "\n"
         return text.strip()
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to parse PDF: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Failed to parse PDF: {type(e).__name__}")
 
 
 def parse_docx(file_path: str) -> str:
@@ -45,7 +71,7 @@ def parse_docx(file_path: str) -> str:
 
         return text.strip()
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to parse DOCX: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Failed to parse DOCX: {type(e).__name__}")
 
 
 def parse_resume(file_path: str) -> str:
@@ -59,7 +85,7 @@ def parse_resume(file_path: str) -> str:
     else:
         raise HTTPException(
             status_code=400,
-            detail=f"Unsupported file format: {ext}. Please upload PDF or DOCX."
+            detail="Unsupported file format. Please upload PDF or DOCX."
         )
 
 
@@ -68,5 +94,5 @@ def cleanup_file(file_path: str) -> None:
     try:
         if os.path.exists(file_path):
             os.remove(file_path)
-    except Exception:
-        pass  # Silently ignore cleanup errors
+    except Exception as e:
+        logger.warning(f"Failed to cleanup uploaded file: {type(e).__name__}")

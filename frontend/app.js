@@ -11,7 +11,15 @@ const sectionIcons = {
     'Formatting & Structure': '📐'
 };
 
-// Store sections data globally for click handling
+// NLP sub-score labels
+const nlpLabels = {
+    'skill_match': { label: 'Skill Match', icon: '⚡' },
+    'keyword_match': { label: 'Keyword Density', icon: '🔑' },
+    'experience_alignment': { label: 'Experience', icon: '💼' },
+    'formatting': { label: 'Formatting', icon: '📐' }
+};
+
+// Store data globally for click handling
 let sectionsData = [];
 let matchedSkillsData = [];
 let missingSkillsData = [];
@@ -23,10 +31,7 @@ let currentUser = null;
 
 // ==================== INITIALIZATION ====================
 document.addEventListener('DOMContentLoaded', () => {
-    // Check if user is logged in
     checkAuthState();
-
-    // Initialize form elements if they exist
     initializeFormElements();
 });
 
@@ -86,7 +91,6 @@ function checkAuthState() {
 }
 
 function updateUIForLoggedInUser() {
-    // Update navbar
     const navButtons = document.querySelector('.nav-buttons');
     const navUser = document.getElementById('navUser');
     const userUsername = document.getElementById('userUsername');
@@ -97,7 +101,6 @@ function updateUIForLoggedInUser() {
         if (userUsername) userUsername.textContent = currentUser.username || currentUser.name;
     }
 
-    // Show analyze content, hide login required
     const loginRequired = document.getElementById('loginRequired');
     const analyzeContent = document.getElementById('analyzeContent');
 
@@ -106,14 +109,12 @@ function updateUIForLoggedInUser() {
 }
 
 function updateUIForLoggedOutUser() {
-    // Update navbar
     const navButtons = document.querySelector('.nav-buttons');
     const navUser = document.getElementById('navUser');
 
     if (navButtons) navButtons.style.display = 'flex';
     if (navUser) navUser.style.display = 'none';
 
-    // Hide analyze content, show login required
     const loginRequired = document.getElementById('loginRequired');
     const analyzeContent = document.getElementById('analyzeContent');
 
@@ -143,7 +144,6 @@ function switchModal(fromModalId, toModalId) {
     setTimeout(() => openModal(toModalId), 100);
 }
 
-// Close modal when clicking outside
 document.addEventListener('click', (e) => {
     if (e.target.classList.contains('modal')) {
         e.target.classList.remove('active');
@@ -151,7 +151,6 @@ document.addEventListener('click', (e) => {
     }
 });
 
-// Close modal with Escape key
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
         document.querySelectorAll('.modal.active').forEach(modal => {
@@ -171,9 +170,7 @@ async function handleLogin(event) {
     try {
         const response = await fetch(`${API_URL}/auth/login`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, password })
         });
 
@@ -189,10 +186,7 @@ async function handleLogin(event) {
 
         closeModal('loginModal');
         updateUIForLoggedInUser();
-
-        // Scroll to analyze section
         scrollToAnalyze();
-
     } catch (error) {
         alert(`Login failed: ${error.message}`);
     }
@@ -209,9 +203,7 @@ async function handleSignup(event) {
     try {
         const response = await fetch(`${API_URL}/auth/signup`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name, username, email, password })
         });
 
@@ -227,87 +219,62 @@ async function handleSignup(event) {
 
         closeModal('signupModal');
         updateUIForLoggedInUser();
-
-        // Scroll to analyze section
         scrollToAnalyze();
-
     } catch (error) {
         alert(`Signup failed: ${error.message}`);
     }
 }
 
 function logout() {
+    const token = localStorage.getItem('resumize_token');
+    if (token) {
+        fetch(`${API_URL}/auth/logout`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` }
+        }).catch(() => {});
+    }
+
     currentUser = null;
     localStorage.removeItem('resumize_user');
     localStorage.removeItem('resumize_token');
     updateUIForLoggedOutUser();
 
-    // Reset form and results if visible
     const form = document.getElementById('analyzeForm');
     const results = document.getElementById('results');
-    if (form) {
-        form.reset();
-        form.style.display = 'block';
-    }
-    if (results) {
-        results.style.display = 'none';
-    }
+    if (form) { form.reset(); form.style.display = 'block'; }
+    if (results) results.style.display = 'none';
     clearFile();
 }
 
 async function handleForgotPassword(event) {
     event.preventDefault();
-
     const email = document.getElementById('forgotEmail').value;
 
     try {
-        const response = await fetch(`${API_URL}/auth/forgot-password`, {
+        await fetch(`${API_URL}/auth/forgot-password`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email })
         });
+    } catch (e) { /* ignore */ }
 
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || 'Failed to send reset link');
-        }
-
-        alert('Password reset link sent to your email!');
-        closeModal('forgotPasswordModal');
-        openModal('loginModal');
-
-    } catch (error) {
-        // For now, show success message anyway (since we don't have email service)
-        alert('If an account exists with this email, you will receive a password reset link.');
-        closeModal('forgotPasswordModal');
-        openModal('loginModal');
-    }
+    alert('If an account exists with this email, you will receive a password reset link.');
+    closeModal('forgotPasswordModal');
+    openModal('loginModal');
 }
 
 // ==================== FAQ TOGGLE ====================
 function toggleFaq(button) {
     const faqItem = button.parentElement;
     const isActive = faqItem.classList.contains('active');
-
-    // Close all FAQ items
-    document.querySelectorAll('.faq-item').forEach(item => {
-        item.classList.remove('active');
-    });
-
-    // Open clicked item if it wasn't active
-    if (!isActive) {
-        faqItem.classList.add('active');
-    }
+    document.querySelectorAll('.faq-item').forEach(item => item.classList.remove('active'));
+    if (!isActive) faqItem.classList.add('active');
 }
 
 // ==================== SCROLL FUNCTION ====================
 function scrollToAnalyze() {
     const analyzeSection = document.getElementById('analyzeSection');
-    if (analyzeSection) {
-        analyzeSection.scrollIntoView({ behavior: 'smooth' });
-    }
+    if (analyzeSection) analyzeSection.scrollIntoView({ behavior: 'smooth' });
 }
 
 // ==================== FILE HANDLING ====================
@@ -356,11 +323,8 @@ async function handleFormSubmit(e) {
     formData.append('job_description', document.getElementById('jobDescription')?.value || '');
 
     const jobTitle = document.getElementById('jobTitle')?.value;
-    if (jobTitle) {
-        formData.append('job_title', jobTitle);
-    }
+    if (jobTitle) formData.append('job_title', jobTitle);
 
-    // Show loading state
     if (submitBtn) submitBtn.disabled = true;
     if (btnText) btnText.style.display = 'none';
     if (btnLoading) btnLoading.style.display = 'inline';
@@ -381,7 +345,6 @@ async function handleFormSubmit(e) {
 
         const data = await response.json();
         displayResults(data);
-
     } catch (error) {
         alert(`Error: ${error.message}`);
     } finally {
@@ -395,18 +358,12 @@ async function handleFormSubmit(e) {
 function startNewAnalysis() {
     const form = document.getElementById('analyzeForm');
     const results = document.getElementById('results');
-
-    if (form) {
-        form.reset();
-        form.style.display = 'block';
-    }
-    if (results) {
-        results.style.display = 'none';
-    }
+    if (form) { form.reset(); form.style.display = 'block'; }
+    if (results) results.style.display = 'none';
     clearFile();
 }
 
-// Get score class based on value
+// Get score class
 function getScoreClass(score) {
     if (score >= 70) return 'high';
     if (score >= 40) return 'medium';
@@ -419,71 +376,182 @@ function displayResults(data) {
     const form = document.getElementById('analyzeForm');
     const results = document.getElementById('results');
 
-    // Top Stats
-    const overallScore = analysis.section_analysis?.overall_score || analysis.match_score;
+    const combined = analysis.combined_score;
+    const nlpResult = analysis.nlp_result;
+    const genaiResult = analysis.genai_result;
+    const sectionAnalysis = analysis.section_analysis;
+
+    // --- Score Circle ---
+    const finalScore = combined.final_score;
+    const scoreClass = getScoreClass(finalScore);
+
     const overallScoreEl = document.getElementById('overallScore');
-    const overallScoreBar = document.getElementById('overallScoreBar');
+    const scoreCircle = document.getElementById('scoreCircle');
+    if (overallScoreEl) overallScoreEl.textContent = `${finalScore}%`;
+    if (scoreCircle) scoreCircle.className = `score-circle ${scoreClass}`;
 
-    if (overallScoreEl) overallScoreEl.textContent = `${overallScore}%`;
-    if (overallScoreBar) overallScoreBar.style.width = `${overallScore}%`;
+    // --- NLP + GenAI Mini Breakdown ---
+    const nlpScoreDisplay = document.getElementById('nlpScoreDisplay');
+    if (nlpScoreDisplay) nlpScoreDisplay.textContent = combined.nlp_score;
 
-    if (analysis.section_analysis) {
+    const genaiAdjustDisplay = document.getElementById('genaiAdjustDisplay');
+    if (genaiAdjustDisplay) {
+        const adj = combined.genai_adjustment;
+        const sign = adj >= 0 ? '+' : '';
+        if (combined.genai_available) {
+            genaiAdjustDisplay.innerHTML = `AI: <strong>${sign}${adj}</strong>`;
+            genaiAdjustDisplay.style.display = 'inline';
+        } else {
+            genaiAdjustDisplay.innerHTML = `AI: <strong>N/A</strong>`;
+            genaiAdjustDisplay.classList.add('unavailable');
+        }
+    }
+
+    // --- Confidence Badge ---
+    const confidenceBadge = document.getElementById('confidenceBadge');
+    if (confidenceBadge) {
+        const confLabels = {
+            'high': 'High Confidence',
+            'moderate': 'Moderate Confidence',
+            'low': 'Low Confidence',
+            'nlp_only': 'NLP Only'
+        };
+        confidenceBadge.textContent = confLabels[combined.confidence] || combined.confidence;
+        confidenceBadge.className = `confidence-badge confidence-${combined.confidence}`;
+    }
+
+    // --- Stats Cards ---
+    if (sectionAnalysis) {
         const totalSections = document.getElementById('totalSections');
         const totalImprovements = document.getElementById('totalImprovements');
+        if (totalSections) totalSections.textContent = sectionAnalysis.total_sections;
+        if (totalImprovements) totalImprovements.textContent = sectionAnalysis.total_improvements;
+    }
 
-        if (totalSections) totalSections.textContent = analysis.section_analysis.total_sections;
-        if (totalImprovements) totalImprovements.textContent = analysis.section_analysis.total_improvements;
+    // --- NLP Breakdown Bars ---
+    const nlpBars = document.getElementById('nlpBars');
+    if (nlpBars && nlpResult?.breakdown) {
+        const breakdown = nlpResult.breakdown;
+        nlpBars.innerHTML = Object.entries(breakdown).map(([key, sub]) => {
+            const meta = nlpLabels[key] || { label: key, icon: '📊' };
+            const barClass = getScoreClass(sub.score);
+            return `
+                <div class="nlp-bar-item">
+                    <div class="nlp-bar-header">
+                        <span class="nlp-bar-label">${meta.icon} ${meta.label}</span>
+                        <span class="nlp-bar-score ${barClass}">${sub.score}% <span class="nlp-bar-weight">(${sub.weight}% weight)</span></span>
+                    </div>
+                    <div class="nlp-bar-track">
+                        <div class="nlp-bar-fill ${barClass}" style="width: ${sub.score}%"></div>
+                    </div>
+                    <p class="nlp-bar-explanation">${escapeHtml(sub.explanation)}</p>
+                </div>
+            `;
+        }).join('');
+    }
 
-        // Store sections data
-        sectionsData = analysis.section_analysis.sections;
+    // --- GenAI Panel ---
+    const genaiPanel = document.getElementById('genaiPanel');
+    if (genaiPanel) {
+        if (genaiResult && combined.genai_available) {
+            genaiPanel.style.display = 'block';
 
-        // Render sidebar section list
+            // Adjustment reason
+            const genaiAdjustment = document.getElementById('genaiAdjustment');
+            if (genaiAdjustment) {
+                const adj = combined.genai_adjustment;
+                const sign = adj >= 0 ? '+' : '';
+                genaiAdjustment.innerHTML = `
+                    <div class="adjustment-summary">
+                        <span class="adjustment-value ${adj >= 0 ? 'positive' : 'negative'}">${sign}${adj} points</span>
+                        <span class="adjustment-reason">${escapeHtml(genaiResult.adjustment_reason)}</span>
+                    </div>
+                `;
+            }
+
+            // Semantic skills
+            const semanticSection = document.getElementById('genaiSemanticSkills');
+            const semanticList = document.getElementById('semanticSkillsList');
+            if (genaiResult.semantic_skills?.length > 0 && semanticSection && semanticList) {
+                semanticSection.style.display = 'block';
+                semanticList.innerHTML = genaiResult.semantic_skills
+                    .map(s => `<span class="skill-tag semantic">${escapeHtml(s)}</span>`)
+                    .join('');
+            }
+
+            // Gap analysis
+            const gapSection = document.getElementById('genaiGapAnalysis');
+            const gapList = document.getElementById('gapAnalysisList');
+            if (genaiResult.gap_analysis?.length > 0 && gapSection && gapList) {
+                gapSection.style.display = 'block';
+                gapList.innerHTML = genaiResult.gap_analysis.map(gap => `
+                    <div class="gap-item">
+                        <div class="gap-header">
+                            <span class="gap-skill">${escapeHtml(gap.skill)}</span>
+                            <span class="gap-importance importance-${gap.importance}">${gap.importance}</span>
+                        </div>
+                        <p class="gap-reason">${escapeHtml(gap.reason)}</p>
+                        <p class="gap-suggestion">${escapeHtml(gap.suggestion)}</p>
+                    </div>
+                `).join('');
+            }
+
+            // Positioning advice
+            const posSection = document.getElementById('genaiPositioning');
+            const posAdvice = document.getElementById('positioningAdvice');
+            if (genaiResult.positioning_advice && posSection && posAdvice) {
+                posSection.style.display = 'block';
+                posAdvice.textContent = genaiResult.positioning_advice;
+            }
+        } else {
+            genaiPanel.style.display = 'none';
+        }
+    }
+
+    // --- Section Analysis Sidebar ---
+    if (sectionAnalysis) {
+        sectionsData = sectionAnalysis.sections;
+
         const sectionList = document.getElementById('sectionList');
         if (sectionList) {
             sectionList.innerHTML = sectionsData.map((section, index) => {
-                const scoreClass = getScoreClass(section.score);
+                const sClass = getScoreClass(section.score);
                 const icon = sectionIcons[section.name] || '📋';
-
                 return `
                     <div class="section-item" data-index="${index}" onclick="showSectionDetail(${index})">
                         <div class="section-item-left">
                             <span class="section-item-icon">${icon}</span>
                             <span class="section-item-name">${escapeHtml(section.name)}</span>
                         </div>
-                        <span class="section-item-score ${scoreClass}">${section.score}%</span>
+                        <span class="section-item-score ${sClass}">${section.score}%</span>
                     </div>
                 `;
             }).join('');
         }
 
-        // Show first section by default
         showSectionDetail(0);
     }
 
-    // AI Summary
+    // --- AI Justification ---
     const scoreJustification = document.getElementById('scoreJustification');
     if (scoreJustification) {
         scoreJustification.textContent = analysis.match_justification;
     }
 
-    // Check if job description was provided (based on ATS breakdown)
-    hasJobDescription = analysis.ats_score?.breakdown?.skill_match?.matched_skills?.length > 0 ||
-                  analysis.ats_score?.breakdown?.keyword_match?.total_keywords > 0;
-
-    // Store skills and bullets data for section detail display
-    matchedSkillsData = analysis.ats_score?.breakdown?.skill_match?.matched_skills || [];
+    // --- Store skills/bullets data ---
+    const skillDetails = nlpResult?.breakdown?.skill_match?.details || {};
+    matchedSkillsData = skillDetails.matched || [];
     missingSkillsData = analysis.missing_skills || [];
-    rewrittenBulletsData = analysis.rewritten_bullets || [];
+    rewrittenBulletsData = genaiResult?.rewritten_bullets || [];
+    hasJobDescription = matchedSkillsData.length > 0 || missingSkillsData.length > 0;
 
-    // Show results, hide form
+    // Show results
     if (form) form.style.display = 'none';
     if (results) results.style.display = 'block';
-
-    // Scroll to results
     results?.scrollIntoView({ behavior: 'smooth' });
 }
 
-// Show section detail in right panel
+// ==================== SECTION DETAIL ====================
 function showSectionDetail(index) {
     const section = sectionsData[index];
     if (!section) return;
@@ -491,12 +559,10 @@ function showSectionDetail(index) {
     const scoreClass = getScoreClass(section.score);
     const icon = sectionIcons[section.name] || '📋';
 
-    // Update active state in sidebar
     document.querySelectorAll('.section-item').forEach((item, i) => {
         item.classList.toggle('active', i === index);
     });
 
-    // Build detail HTML
     const detailPanel = document.getElementById('analysisDetail');
 
     let issuesHtml = '';
@@ -547,18 +613,9 @@ function showSectionDetail(index) {
         `;
     }
 
-    // Add section-specific content
     let sectionSpecificHtml = '';
-
-    // Skills section: show matched and missing skills
-    if (section.name === 'Skills') {
-        sectionSpecificHtml = buildSkillsDetailHtml();
-    }
-
-    // Work Experience section: show optimized bullet points
-    if (section.name === 'Work Experience') {
-        sectionSpecificHtml = buildBulletsDetailHtml();
-    }
+    if (section.name === 'Skills') sectionSpecificHtml = buildSkillsDetailHtml();
+    if (section.name === 'Work Experience') sectionSpecificHtml = buildBulletsDetailHtml();
 
     if (detailPanel) {
         detailPanel.innerHTML = `
@@ -577,11 +634,10 @@ function showSectionDetail(index) {
     }
 }
 
-// Build HTML for skills detail (matched and missing skills)
+// Build skills detail
 function buildSkillsDetailHtml() {
     let html = '';
 
-    // Matched Skills
     if (hasJobDescription && matchedSkillsData.length > 0) {
         html += `
             <div class="detail-block">
@@ -596,10 +652,9 @@ function buildSkillsDetailHtml() {
         `;
     }
 
-    // Missing Skills / Improvement Areas
     if (missingSkillsData.length > 0) {
         const title = hasJobDescription ? 'Missing Skills' : 'Improvement Areas';
-        const desc = hasJobDescription ? 'Add these to your resume if applicable' : 'General recommendations to strengthen your resume';
+        const desc = hasJobDescription ? 'Add these to your resume if applicable' : 'General recommendations';
         html += `
             <div class="detail-block">
                 <div class="detail-block-header">
@@ -626,17 +681,16 @@ function buildSkillsDetailHtml() {
     return html;
 }
 
-// Build HTML for optimized bullet points
+// Build bullets detail
 function buildBulletsDetailHtml() {
-    if (rewrittenBulletsData.length === 0) {
-        return '';
-    }
+    if (rewrittenBulletsData.length === 0) return '';
 
     return `
         <div class="detail-block">
             <div class="detail-block-header">
                 <span class="icon">✨</span>
                 <span>Optimized Bullet Points</span>
+                <span class="source-tag ai-tag" style="margin-left: auto; font-size: 0.7rem;">AI-Generated</span>
             </div>
             <p class="section-description">Copy these ATS-friendly bullets to your resume</p>
             <div class="bullets-list">
@@ -647,7 +701,7 @@ function buildBulletsDetailHtml() {
                         <div class="bullet-keywords">
                             ${bullet.keywords_used.map(kw => `<span class="keyword-tag">${escapeHtml(kw)}</span>`).join('')}
                         </div>
-                        <button class="copy-btn" onclick="copyToClipboard('${escapeHtml(bullet.rewritten).replace(/'/g, "\\'")}')">
+                        <button class="copy-btn" data-copy-text="${escapeHtml(bullet.rewritten)}">
                             Copy bullet
                         </button>
                     </div>
@@ -671,3 +725,11 @@ function copyToClipboard(text) {
         console.error('Failed to copy:', err);
     });
 }
+
+// Delegated click handler for copy buttons (avoids inline onclick XSS)
+document.addEventListener('click', (e) => {
+    const copyBtn = e.target.closest('.copy-btn[data-copy-text]');
+    if (copyBtn) {
+        copyToClipboard(copyBtn.getAttribute('data-copy-text'));
+    }
+});

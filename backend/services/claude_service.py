@@ -1,204 +1,140 @@
-import os
-import json
-from groq import Groq
+"""
+Analysis Orchestrator - Coordinates the layered ATS analysis pipeline.
+
+Pipeline:
+  1. NLP Analysis (deterministic, fast) → base score
+  2. Section Analysis (deterministic) → per-section breakdown
+  3. GenAI Analysis (assistive, may fail gracefully) → semantic insights
+  4. Score Combiner → final score with confidence
+"""
+
 from fastapi import HTTPException
-from models.schemas import AnalysisResult, RewrittenBullet, ATSScore, ATSScoreBreakdown
-from models.schemas import SkillMatchScore, KeywordMatchScore, ExperienceMatchScore, FormattingScore
-from models.schemas import SectionAnalysis, SectionScore
-from services.ats_service import calculate_ats_score
+from models.schemas import (
+    AnalysisResult, NLPResult, NLPScoreBreakdown, NLPSubScore,
+    GenAIResult, GapAnalysisItem, RewrittenBullet,
+    CombinedScore, SectionAnalysis, SectionScore
+)
+from services.nlp_service import run_nlp_analysis
+from services.genai_service import run_genai_analysis
+from services.score_combiner import combine_scores
 from services.section_service import analyze_all_sections
-
-# Prompt when job description is provided
-ANALYSIS_PROMPT_WITH_JD = """You are an expert ATS (Applicant Tracking System) resume analyzer and career coach.
-
-Analyze the following resume against the job description. Provide a detailed analysis in JSON format.
-
-RESUME:
-{resume_text}
-
-JOB DESCRIPTION:
-{job_description}
-
-Provide your analysis as a valid JSON object with this exact structure:
-{{
-    "jd_skills": ["<skill1>", "<skill2>", ...],
-    "match_justification": "<brief 2-3 sentence explanation of how well the resume matches>",
-    "missing_skills": ["<skill1>", "<skill2>", ...],
-    "rewritten_bullets": [
-        {{
-            "original": "<original bullet point from resume>",
-            "rewritten": "<ATS-optimized version using JD keywords>",
-            "keywords_used": ["<keyword1>", "<keyword2>"]
-        }}
-    ]
-}}
-
-Guidelines:
-1. JD_SKILLS: Extract ALL technical skills, tools, frameworks, and qualifications mentioned in the job description
-2. MISSING_SKILLS: List specific skills/technologies from the JD not found in the resume
-3. REWRITTEN BULLETS: Select 3-5 most relevant bullets and rewrite them to:
-   - Start with strong action verbs (Led, Developed, Implemented, Optimized, etc.)
-   - Include specific keywords from the job description
-   - Add quantifiable achievements where possible
-   - Keep each bullet to 1-2 lines
-   - Make them ATS-friendly
-
-Return ONLY the JSON object, no additional text or markdown formatting."""
-
-# Prompt when NO job description is provided (general ATS analysis)
-ANALYSIS_PROMPT_NO_JD = """You are an expert ATS (Applicant Tracking System) resume analyzer and career coach.
-
-Analyze the following resume for general ATS compatibility and provide improvement suggestions.
-
-RESUME:
-{resume_text}
-
-Provide your analysis as a valid JSON object with this exact structure:
-{{
-    "detected_skills": ["<skill1>", "<skill2>", ...],
-    "match_justification": "<2-3 sentence overview of the resume's strengths, weaknesses, and ATS compatibility>",
-    "improvement_areas": ["<area1>", "<area2>", ...],
-    "rewritten_bullets": [
-        {{
-            "original": "<original bullet point that could be improved>",
-            "rewritten": "<ATS-optimized version with stronger impact>",
-            "keywords_used": ["<keyword1>", "<keyword2>"]
-        }}
-    ]
-}}
-
-Guidelines:
-1. DETECTED_SKILLS: Extract ALL technical skills, tools, frameworks, soft skills found in the resume
-2. IMPROVEMENT_AREAS: List general areas that need improvement (e.g., "Add more quantifiable metrics", "Include LinkedIn profile")
-3. REWRITTEN BULLETS: Select 3-5 bullets that could be improved and rewrite them to:
-   - Start with strong action verbs (Led, Developed, Implemented, Optimized, etc.)
-   - Add quantifiable achievements (%, $, numbers)
-   - Make them more impactful and ATS-friendly
-   - Keep each bullet to 1-2 lines
-
-Return ONLY the JSON object, no additional text or markdown formatting."""
 
 
 def analyze_resume(resume_text: str, job_description: str = "") -> AnalysisResult:
     """
-    Analyze resume for ATS compatibility.
-    If job_description is provided, also performs targeted skill matching.
+    Run the full layered ATS analysis pipeline.
 
-    Uses:
-    - Groq API (Llama 3) for AI insights (bullet rewrites, skill extraction)
-    - Deterministic ATS Engine for weighted scoring
-    - Section-by-section analysis
+    1. NLP layer: deterministic scoring (skill match, keywords, experience, formatting)
+    2. Section analysis: per-section breakdown with improvements/issues
+    3. GenAI layer: semantic analysis with score adjustment (±15 max)
+    4. Combine: merge NLP + GenAI into final score with confidence level
     """
-    api_key = os.getenv("GROQ_API_KEY")
+    if not resume_text or not resume_text.strip():
+        raise HTTPException(status_code=400, detail="Resume text is empty")
 
-    if not api_key:
-        raise HTTPException(
-            status_code=500,
-            detail="GROQ_API_KEY not configured. Please set it in your .env file."
-        )
-
-    client = Groq(api_key=api_key)
-
-    # Determine if we have a job description
     has_jd = bool(job_description and job_description.strip())
 
-    if has_jd:
-        prompt = ANALYSIS_PROMPT_WITH_JD.format(
-            resume_text=resume_text,
-            job_description=job_description
-        )
-    else:
-        prompt = ANALYSIS_PROMPT_NO_JD.format(
-            resume_text=resume_text
-        )
+    # --- Step 1: NLP Analysis (deterministic) ---
+    nlp_raw = run_nlp_analysis(resume_text, job_description)
 
+    # --- Step 2: Section Analysis (deterministic) ---
+    extracted_skills = nlp_raw.get("extracted_skills", [])
+    section_raw = analyze_all_sections(resume_text, job_description, extracted_skills)
+
+    section_analysis = SectionAnalysis(
+        overall_score=section_raw["overall_score"],
+        sections=[SectionScore(**s) for s in section_raw["sections"]],
+        total_sections=section_raw["total_sections"],
+        total_improvements=section_raw["total_improvements"],
+        total_issues=section_raw["total_issues"]
+    )
+
+    # --- Step 3: GenAI Analysis (assistive, graceful degradation) ---
+    genai_raw = None
+    genai_result = None
     try:
-        # Step 1: AI Analysis (skill extraction, bullet rewrites)
-        response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.3,
-            max_tokens=4096
-        )
-        response_text = response.choices[0].message.content
+        genai_raw = run_genai_analysis(resume_text, job_description, nlp_raw)
+    except Exception:
+        pass  # GenAI failure is non-fatal
 
-        # Clean up response if it contains markdown code blocks
-        if response_text.startswith("```"):
-            response_text = response_text.split("```")[1]
-            if response_text.startswith("json"):
-                response_text = response_text[4:]
-        if response_text.endswith("```"):
-            response_text = response_text[:-3]
-        response_text = response_text.strip()
+    if genai_raw:
+        # Parse gap analysis items
+        gap_items = []
+        for item in genai_raw.get("gap_analysis", []):
+            if isinstance(item, dict):
+                gap_items.append(GapAnalysisItem(
+                    skill=item.get("skill", "Unknown"),
+                    importance=item.get("importance", "medium"),
+                    reason=item.get("reason", ""),
+                    suggestion=item.get("suggestion", "")
+                ))
 
-        # Parse JSON response
-        ai_analysis = json.loads(response_text)
+        # Parse rewritten bullets
+        bullets = []
+        for b in genai_raw.get("rewritten_bullets", []):
+            if isinstance(b, dict):
+                bullets.append(RewrittenBullet(
+                    original=b.get("original", ""),
+                    rewritten=b.get("rewritten", ""),
+                    keywords_used=b.get("keywords_used", [])
+                ))
 
-        # Get skills list (different key depending on whether JD was provided)
-        if has_jd:
-            jd_skills = ai_analysis.get("jd_skills", [])
-            missing_skills = ai_analysis.get("missing_skills", [])
-        else:
-            jd_skills = ai_analysis.get("detected_skills", [])
-            missing_skills = ai_analysis.get("improvement_areas", [])
-
-        # Step 2: Deterministic ATS Scoring
-        ats_result = calculate_ats_score(resume_text, job_description, jd_skills)
-
-        # Build ATS Score breakdown
-        breakdown = ats_result["breakdown"]
-        ats_score = ATSScore(
-            final_score=ats_result["final_score"],
-            breakdown=ATSScoreBreakdown(
-                skill_match=SkillMatchScore(**breakdown["skill_match"]),
-                keyword_match=KeywordMatchScore(**breakdown["keyword_match"]),
-                experience_match=ExperienceMatchScore(**breakdown["experience_match"]),
-                formatting=FormattingScore(**breakdown["formatting"])
-            )
+        genai_result = GenAIResult(
+            score_adjustment=genai_raw.get("score_adjustment", 0),
+            adjustment_reason=genai_raw.get("adjustment_reason", ""),
+            semantic_skills=genai_raw.get("semantic_skills", []),
+            gap_analysis=gap_items,
+            rewritten_bullets=bullets,
+            positioning_advice=genai_raw.get("positioning_advice", "")
         )
 
-        # Step 3: Section-by-section analysis
-        section_result = analyze_all_sections(resume_text, job_description, jd_skills)
-        section_analysis = SectionAnalysis(
-            overall_score=section_result["overall_score"],
-            sections=[SectionScore(**s) for s in section_result["sections"]],
-            total_sections=section_result["total_sections"],
-            total_improvements=section_result["total_improvements"],
-            total_issues=section_result["total_issues"]
-        )
+    # --- Step 4: Combine Scores ---
+    combined_raw = combine_scores(nlp_raw, genai_raw)
 
-        # Convert bullets to Pydantic model
-        rewritten_bullets = [
-            RewrittenBullet(**bullet)
-            for bullet in ai_analysis.get("rewritten_bullets", [])
-        ]
+    combined_score = CombinedScore(
+        final_score=combined_raw["final_score"],
+        nlp_score=combined_raw["nlp_score"],
+        genai_adjustment=combined_raw["genai_adjustment"],
+        genai_available=combined_raw["genai_available"],
+        confidence=combined_raw["confidence"],
+        adjustment_reason=combined_raw["adjustment_reason"]
+    )
 
-        # Build justification message
-        if has_jd:
-            justification = ai_analysis.get("match_justification", "")
-        else:
-            justification = ai_analysis.get("match_justification",
-                "General ATS analysis completed. Add a job description for targeted skill matching and more specific recommendations.")
+    # Build NLP result model
+    breakdown = nlp_raw["breakdown"]
+    nlp_result = NLPResult(
+        score=nlp_raw["nlp_score"],
+        breakdown=NLPScoreBreakdown(
+            skill_match=NLPSubScore(**breakdown["skill_match"]),
+            keyword_match=NLPSubScore(**breakdown["keyword_match"]),
+            experience_alignment=NLPSubScore(**breakdown["experience_alignment"]),
+            formatting=NLPSubScore(**breakdown["formatting"])
+        ),
+        extracted_skills=nlp_raw.get("extracted_skills", [])
+    )
 
-        # Combine AI insights with deterministic scoring
-        return AnalysisResult(
-            match_score=section_result["overall_score"],  # Use section-based score
-            match_justification=justification,
-            missing_skills=missing_skills,
-            rewritten_bullets=rewritten_bullets,
-            ats_score=ats_score,
-            section_analysis=section_analysis
-        )
+    # Build justification
+    if genai_raw and genai_raw.get("adjustment_reason"):
+        justification = genai_raw["adjustment_reason"]
+    elif has_jd:
+        justification = breakdown["skill_match"]["explanation"]
+    else:
+        justification = "General ATS analysis completed. Add a job description for targeted skill matching."
 
-    except json.JSONDecodeError as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to parse AI response: {str(e)}"
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Analysis failed: {str(e)}"
-        )
+    # Get missing skills
+    missing_skills = breakdown["skill_match"]["details"].get("missing", [])
+    if genai_raw and genai_raw.get("gap_analysis"):
+        # Add gap skills from GenAI that aren't already in missing
+        gap_skills = [g.get("skill", "") for g in genai_raw["gap_analysis"] if isinstance(g, dict)]
+        for s in gap_skills:
+            if s and s not in missing_skills:
+                missing_skills.append(s)
+
+    return AnalysisResult(
+        combined_score=combined_score,
+        nlp_result=nlp_result,
+        genai_result=genai_result,
+        section_analysis=section_analysis,
+        match_justification=justification,
+        missing_skills=missing_skills
+    )

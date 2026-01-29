@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Any
 from datetime import datetime
 
 
@@ -9,50 +9,60 @@ class RewrittenBullet(BaseModel):
     keywords_used: list[str]
 
 
-# ATS Score Breakdown Models
-class SkillMatchScore(BaseModel):
+# --- NLP Score Models (Deterministic) ---
+
+class NLPSubScore(BaseModel):
     score: int
     weight: int
     weighted_score: int
-    matched_skills: list[str]
-    missing_skills: list[str]
+    explanation: str
+    details: dict[str, Any]
 
 
-class KeywordMatchScore(BaseModel):
+class NLPScoreBreakdown(BaseModel):
+    skill_match: NLPSubScore
+    keyword_match: NLPSubScore
+    experience_alignment: NLPSubScore
+    formatting: NLPSubScore
+
+
+class NLPResult(BaseModel):
     score: int
-    weight: int
-    weighted_score: int
-    matched_count: int
-    total_keywords: int
+    breakdown: NLPScoreBreakdown
+    extracted_skills: list[str]
 
 
-class ExperienceMatchScore(BaseModel):
-    score: int
-    weight: int
-    weighted_score: int
-    note: str
+# --- GenAI Models (Assistive) ---
+
+class GapAnalysisItem(BaseModel):
+    skill: str
+    importance: str  # "high", "medium", "low"
+    reason: str
+    suggestion: str
 
 
-class FormattingScore(BaseModel):
-    score: int
-    weight: int
-    weighted_score: int
-    warnings: list[str]
+class GenAIResult(BaseModel):
+    score_adjustment: int
+    adjustment_reason: str
+    semantic_skills: list[str]
+    gap_analysis: list[GapAnalysisItem]
+    rewritten_bullets: list[RewrittenBullet]
+    positioning_advice: str
 
 
-class ATSScoreBreakdown(BaseModel):
-    skill_match: SkillMatchScore
-    keyword_match: KeywordMatchScore
-    experience_match: ExperienceMatchScore
-    formatting: FormattingScore
+# --- Combined Score ---
 
-
-class ATSScore(BaseModel):
+class CombinedScore(BaseModel):
     final_score: int
-    breakdown: ATSScoreBreakdown
+    nlp_score: int
+    genai_adjustment: int
+    genai_available: bool
+    confidence: str  # "high", "moderate", "low", "nlp_only"
+    adjustment_reason: str
 
 
-# Section Analysis Models
+# --- Section Analysis Models ---
+
 class SectionScore(BaseModel):
     name: str
     icon: str
@@ -69,13 +79,15 @@ class SectionAnalysis(BaseModel):
     total_issues: int
 
 
+# --- Main Analysis Result ---
+
 class AnalysisResult(BaseModel):
-    match_score: int
+    combined_score: CombinedScore
+    nlp_result: NLPResult
+    genai_result: Optional[GenAIResult] = None
+    section_analysis: Optional[SectionAnalysis] = None
     match_justification: str
     missing_skills: list[str]
-    rewritten_bullets: list[RewrittenBullet]
-    ats_score: Optional[ATSScore] = None
-    section_analysis: Optional[SectionAnalysis] = None  # New section breakdown
 
 
 class AnalysisResponse(BaseModel):

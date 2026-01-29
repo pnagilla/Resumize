@@ -82,7 +82,7 @@
                 </div>
                 <div class="form-group">
                     <label for="signupPassword">Password</label>
-                    <input type="password" id="signupPassword" required placeholder="Create a password" minlength="6">
+                    <input type="password" id="signupPassword" required placeholder="Create a password (letters + numbers)" minlength="8">
                 </div>
                 <button type="submit" class="btn-primary">Create Account</button>
             </form>
@@ -249,24 +249,65 @@
                 <div id="results" class="results" style="display: none;">
                     <h2>Analysis Results</h2>
 
-                    <!-- Top Stats Row -->
-                    <div class="stats-row">
-                        <div class="stat-card main-score">
-                            <div class="stat-value" id="overallScore">0%</div>
-                            <div class="stat-label">Overall ATS Score</div>
-                            <div class="stat-bar">
-                                <div class="stat-bar-fill" id="overallScoreBar"></div>
+                    <!-- Score Overview -->
+                    <div class="score-overview">
+                        <div class="score-circle-container">
+                            <div class="score-circle" id="scoreCircle">
+                                <div class="score-value" id="overallScore">0%</div>
+                                <div class="score-label">ATS Score</div>
+                            </div>
+                            <div class="score-breakdown-mini">
+                                <span class="score-source nlp-source">NLP: <strong id="nlpScoreDisplay">0</strong></span>
+                                <span class="score-divider">|</span>
+                                <span class="score-source genai-source" id="genaiAdjustDisplay">AI: <strong>+0</strong></span>
+                            </div>
+                            <div class="confidence-badge" id="confidenceBadge">High Confidence</div>
+                        </div>
+
+                        <!-- Stats Cards -->
+                        <div class="stats-cards">
+                            <div class="stat-card">
+                                <div class="stat-value" id="totalSections">0</div>
+                                <div class="stat-label">Sections Analyzed</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value improvements-count" id="totalImprovements">0</div>
+                                <div class="stat-label">Improvements</div>
                             </div>
                         </div>
-                        <div class="stat-card">
-                            <div class="stat-value" id="totalSections">0</div>
-                            <div class="stat-label">Resume Sections</div>
-                            <div class="stat-sublabel">Analyzed for improvements</div>
+                    </div>
+
+                    <!-- NLP Score Breakdown -->
+                    <div class="nlp-breakdown-card">
+                        <div class="card-header">
+                            <h3>Score Breakdown</h3>
+                            <span class="source-tag deterministic-tag">Deterministic NLP</span>
                         </div>
-                        <div class="stat-card">
-                            <div class="stat-value improvements-count" id="totalImprovements">0</div>
-                            <div class="stat-label">Improvements</div>
-                            <div class="stat-sublabel">Suggested changes</div>
+                        <div class="nlp-bars" id="nlpBars">
+                            <!-- NLP sub-score bars inserted by JS -->
+                        </div>
+                    </div>
+
+                    <!-- GenAI Insights Panel -->
+                    <div class="genai-panel" id="genaiPanel" style="display: none;">
+                        <div class="card-header">
+                            <h3>AI Insights</h3>
+                            <span class="source-tag ai-tag">AI-Assisted</span>
+                        </div>
+                        <div class="genai-adjustment" id="genaiAdjustment">
+                            <!-- Adjustment reason -->
+                        </div>
+                        <div class="genai-semantic-skills" id="genaiSemanticSkills" style="display: none;">
+                            <h4>Implied Skills Detected</h4>
+                            <div class="skills-list" id="semanticSkillsList"></div>
+                        </div>
+                        <div class="genai-gap-analysis" id="genaiGapAnalysis" style="display: none;">
+                            <h4>Gap Analysis</h4>
+                            <div class="gap-list" id="gapAnalysisList"></div>
+                        </div>
+                        <div class="genai-positioning" id="genaiPositioning" style="display: none;">
+                            <h4>Positioning Advice</h4>
+                            <p id="positioningAdvice"></p>
                         </div>
                     </div>
 
@@ -276,11 +317,11 @@
                         <div class="analysis-sidebar">
                             <div class="sidebar-header">
                                 <span class="sidebar-icon">⚙️</span>
-                                <span>Component Analysis</span>
+                                <span>Section Analysis</span>
                             </div>
                             <div class="sidebar-title">Resume Sections</div>
                             <div class="section-list" id="sectionList">
-                                <!-- Sections will be dynamically inserted here -->
+                                <!-- Sections dynamically inserted -->
                             </div>
                         </div>
 
@@ -294,7 +335,7 @@
 
                     <!-- AI Justification -->
                     <div class="result-card">
-                        <h3>AI Analysis Summary</h3>
+                        <h3>Analysis Summary</h3>
                         <p id="scoreJustification" class="ai-summary"></p>
                     </div>
 
