@@ -14,9 +14,12 @@ Graceful degradation: if GenAI fails, the system still works with NLP-only score
 
 import os
 import json
+import logging
 from typing import Optional
 from groq import Groq
 from fastapi import HTTPException
+
+logger = logging.getLogger(__name__)
 
 
 # Prompt when JD is provided
@@ -135,6 +138,7 @@ def run_genai_analysis(
     """
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
+        logger.warning("GROQ_API_KEY not set — skipping GenAI analysis")
         return None  # Graceful degradation — no API key means skip GenAI
 
     client = Groq(api_key=api_key)
@@ -202,7 +206,9 @@ def run_genai_analysis(
 
         return result
 
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as e:
+        logger.error(f"GenAI JSON parse error: {e}")
         return None  # Graceful degradation
-    except Exception:
+    except Exception as e:
+        logger.error(f"GenAI analysis failed: {type(e).__name__}: {e}")
         return None  # Graceful degradation
