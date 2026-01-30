@@ -212,14 +212,9 @@ async function handleSignup(event) {
             throw new Error(error.detail || 'Signup failed');
         }
 
-        const data = await response.json();
-        currentUser = data.user;
-        localStorage.setItem('resumize_user', JSON.stringify(currentUser));
-        localStorage.setItem('resumize_token', data.token);
-
         closeModal('signupModal');
-        updateUIForLoggedInUser();
-        scrollToAnalyze();
+        alert('Account created successfully! Please log in.');
+        openModal('loginModal');
     } catch (error) {
         alert(`Signup failed: ${error.message}`);
     }
