@@ -356,6 +356,12 @@ async function handleFormSubmit(e) {
 
         if (!response.ok) {
             const error = await response.json();
+            // If token is invalid, auto-logout and redirect to login
+            if (response.status === 401) {
+                logout();
+                alert('Session expired. Please log in again.');
+                return;
+            }
             throw new Error(error.detail || 'Analysis failed');
         }
 
