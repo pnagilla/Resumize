@@ -80,11 +80,32 @@ function initializeFormElements() {
 }
 
 // ==================== AUTH STATE ====================
-function checkAuthState() {
+async function checkAuthState() {
     const savedUser = localStorage.getItem('resumize_user');
-    if (savedUser) {
-        currentUser = JSON.parse(savedUser);
-        updateUIForLoggedInUser();
+    const token = localStorage.getItem('resumize_token');
+
+    if (savedUser && token) {
+        // Verify token with server
+        try {
+            const response = await fetch(`${API_URL}/auth/me`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (response.ok) {
+                currentUser = JSON.parse(savedUser);
+                updateUIForLoggedInUser();
+            } else {
+                // Token invalid - clear and show login
+                localStorage.removeItem('resumize_user');
+                localStorage.removeItem('resumize_token');
+                currentUser = null;
+                updateUIForLoggedOutUser();
+            }
+        } catch (error) {
+            // Network error - keep user logged in with cached data
+            currentUser = JSON.parse(savedUser);
+            updateUIForLoggedInUser();
+        }
     } else {
         updateUIForLoggedOutUser();
     }
